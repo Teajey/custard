@@ -1,8 +1,9 @@
-mod map;
-
+pub mod map;
 pub use map::Map;
 
-#[derive(Debug)]
+use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize)]
 pub struct FrontmatterFile {
     frontmatter: Option<serde_yaml::Mapping>,
     body: String,
