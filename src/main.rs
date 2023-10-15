@@ -5,18 +5,17 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::{HeaderMap, StatusCode},
     routing, Json, Router,
 };
 use notify::{RecursiveMode, Watcher};
 
 use frontmatter_file::FrontmatterFile;
-use serde::Deserialize;
 
 async fn frontmatter_get_many(
     State(markdown_files): State<frontmatter_file::map::ArcMutex>,
-) -> Result<Json<Vec<FrontmatterFile>>, StatusCode> {
+) -> Result<Json<Vec<frontmatter_file::Named>>, StatusCode> {
     let map = markdown_files.0.as_ref();
     let map = match map.lock() {
         Ok(map) => map,
@@ -25,7 +24,15 @@ async fn frontmatter_get_many(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
-    let files = map.inner.values().map(Clone::clone).collect::<Vec<_>>();
+    let files = map
+        .inner
+        .iter()
+        .map(|(path, file)| frontmatter_file::Named::from_map_entry((path, file)))
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| {
+            eprintln!("A response failed because of a non-UTF-8 filename");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     Ok(Json(files))
 }
 
