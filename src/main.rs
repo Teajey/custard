@@ -1,9 +1,10 @@
 mod frontmatter_file;
 mod fs;
+mod utf8_filepath;
 
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
@@ -12,6 +13,7 @@ use axum::{
 use notify::{RecursiveMode, Watcher};
 
 use frontmatter_file::FrontmatterFile;
+use utf8_filepath::UTF8FilePath;
 
 async fn frontmatter_get_many(
     State(markdown_files): State<frontmatter_file::map::ArcMutex>,
@@ -28,11 +30,7 @@ async fn frontmatter_get_many(
         .inner
         .iter()
         .map(|(path, file)| frontmatter_file::Named::from_map_entry((path, file)))
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| {
-            eprintln!("A response failed because of a non-UTF-8 filename");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        .collect();
     Ok(Json(files))
 }
 
@@ -51,21 +49,7 @@ async fn frontmatter_get_filename(
     let file = map
         .inner
         .iter()
-        .filter_map(|(path, file)| {
-            let Some((os_filename, filename)) = path
-                .file_name()
-                .map(|os_filename| (os_filename, os_filename.to_str()))
-            else {
-                return None;
-            };
-            if let Some(f) = filename {
-                Some((f, file))
-            } else {
-                eprintln!("Failed to parse a filename as UTF-8: {os_filename:?}");
-                None
-            }
-        })
-        .find(|(filename, _)| filename == &name);
+        .find(|(filepath, _)| filepath.name() == name);
     let Some((_, file)) = file else {
         return Err(StatusCode::NOT_FOUND);
     };
@@ -87,7 +71,11 @@ async fn run() -> Result<()> {
     }
 
     let current_dir = std::env::current_dir()?;
-    let markdown_fps = fs::filepaths_with_extensions(&current_dir, &["md"])?;
+    let markdown_fps = fs::filepaths_with_extensions(&current_dir, &["md"])?
+        .into_iter()
+        .map(UTF8FilePath::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| anyhow!("Target paths are not all UTF-8 files: {err}"))?;
     let markdown_files = markdown_fps
         .into_iter()
         .map(|path| {

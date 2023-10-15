@@ -1,10 +1,11 @@
 pub mod map;
-use std::path::Path;
 
 pub use map::Map;
 
 use anyhow::Result;
 use serde::Serialize;
+
+use crate::utf8_filepath::UTF8FilePath;
 
 #[derive(Serialize)]
 pub struct Named {
@@ -14,17 +15,13 @@ pub struct Named {
 }
 
 impl Named {
-    pub fn from_map_entry((path, file): (&Path, &FrontmatterFile)) -> Option<Self> {
-        let name = path
-            .file_name()
-            .expect("This path must have a valid file name")
-            .to_str()?
-            .to_owned();
-        Some(Named {
+    pub fn from_map_entry((path, file): (&UTF8FilePath, &FrontmatterFile)) -> Self {
+        let name = path.name().to_owned();
+        Named {
             name,
             frontmatter: file.frontmatter.clone(),
             body: file.body.clone(),
-        })
+        }
     }
 }
 
