@@ -4,10 +4,15 @@ mod fs;
 use std::collections::HashMap;
 
 use anyhow::Result;
-use axum::{extract::State, http::StatusCode, routing, Json, Router};
+use axum::{
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode},
+    routing, Json, Router,
+};
 use notify::{RecursiveMode, Watcher};
 
 use frontmatter_file::FrontmatterFile;
+use serde::Deserialize;
 
 async fn frontmatter_get_many(
     State(markdown_files): State<frontmatter_file::map::ArcMutex>,
@@ -24,9 +29,10 @@ async fn frontmatter_get_many(
     Ok(Json(files))
 }
 
-async fn frontmatter_get_one(
+async fn frontmatter_get_filename(
     State(markdown_files): State<frontmatter_file::map::ArcMutex>,
-) -> Result<Json<Option<FrontmatterFile>>, StatusCode> {
+    Path(name): Path<String>,
+) -> Result<(HeaderMap, String), StatusCode> {
     let map = markdown_files.0.as_ref();
     let map = match map.lock() {
         Ok(map) => map,
@@ -35,8 +41,37 @@ async fn frontmatter_get_one(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
-    let file = map.inner.values().next().map(Clone::clone);
-    Ok(Json(file))
+    let file = map
+        .inner
+        .iter()
+        .filter_map(|(path, file)| {
+            let Some((os_filename, filename)) = path
+                .file_name()
+                .map(|os_filename| (os_filename, os_filename.to_str()))
+            else {
+                return None;
+            };
+            if let Some(f) = filename {
+                Some((f, file))
+            } else {
+                eprintln!("Failed to parse a filename as UTF-8: {os_filename:?}");
+                None
+            }
+        })
+        .find(|(filename, _)| filename == &name);
+    let Some((_, file)) = file else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+
+    let mut headers = HeaderMap::new();
+    let frontmatter_string =
+        serde_json::to_string(&file.frontmatter).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let frontmatter_header_value = frontmatter_string.parse().map_err(|err| {
+        eprintln!("Failed to parse header value ({frontmatter_string:?}): {err}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    headers.insert("x-frontmatter", frontmatter_header_value);
+    Ok((headers, file.body.clone()))
 }
 
 async fn run() -> Result<()> {
@@ -68,7 +103,10 @@ async fn run() -> Result<()> {
 
     let app = Router::new()
         .route("/frontmatter/many", routing::get(frontmatter_get_many))
-        .route("/frontmatter/one", routing::get(frontmatter_get_one))
+        .route(
+            "/frontmatter/filename/:name",
+            routing::get(frontmatter_get_filename),
+        )
         .with_state(markdown_files);
 
     axum::Server::bind(&"0.0.0.0:4000".parse()?)

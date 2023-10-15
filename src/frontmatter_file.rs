@@ -5,8 +5,8 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FrontmatterFile {
-    frontmatter: Option<serde_yaml::Mapping>,
-    body: String,
+    pub frontmatter: Option<serde_yaml::Mapping>,
+    pub body: String,
 }
 
 impl FrontmatterFile {
