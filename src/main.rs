@@ -1,4 +1,5 @@
 mod frontmatter_file;
+mod frontmatter_query;
 mod fs;
 mod utf8_filepath;
 
@@ -10,6 +11,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     routing, Json, Router,
 };
+use frontmatter_query::FrontmatterQuery;
 use notify::{RecursiveMode, Watcher};
 
 use frontmatter_file::FrontmatterFile;
@@ -29,6 +31,37 @@ async fn frontmatter_get_many(
     let files = map
         .inner
         .iter()
+        .map(|(path, file)| frontmatter_file::Named::from_map_entry((path, file)))
+        .collect();
+    Ok(Json(files))
+}
+
+async fn frontmatter_post_many(
+    State(markdown_files): State<frontmatter_file::map::ArcMutex>,
+    Json(query): Json<FrontmatterQuery>,
+) -> Result<Json<Vec<frontmatter_file::Named>>, StatusCode> {
+    let map = markdown_files.0.as_ref();
+    let map = match map.lock() {
+        Ok(map) => map,
+        Err(err) => {
+            eprintln!("Failed to lock data on a get_many request: {err}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    let files = map
+        .inner
+        .iter()
+        .filter(|(_, file)| {
+            let Some(frontmatter) = &file.frontmatter else {
+                return query.is_empty();
+            };
+            query.is_subset(
+                &serde_json::from_value(
+                    serde_json::to_value(frontmatter).expect("valid yaml must map to valid json"),
+                )
+                .expect("Map<String, Value> is valid json"),
+            )
+        })
         .map(|(path, file)| frontmatter_file::Named::from_map_entry((path, file)))
         .collect();
     Ok(Json(files))
@@ -97,6 +130,7 @@ async fn run() -> Result<()> {
     watcher.watch(&current_dir, RecursiveMode::NonRecursive)?;
 
     let app = Router::new()
+        .route("/frontmatter/many", routing::post(frontmatter_post_many))
         .route("/frontmatter/many", routing::get(frontmatter_get_many))
         .route(
             "/frontmatter/filename/:name",
