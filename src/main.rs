@@ -99,7 +99,11 @@ async fn frontmatter_get_filename(
 }
 
 async fn run() -> Result<()> {
-    if let Some(wd) = std::env::args().nth(1) {
+    let mut args = std::env::args();
+    let port = args
+        .nth(1)
+        .ok_or_else(|| anyhow!("Expected a port number as a first argument"))?;
+    if let Some(wd) = args.next() {
         std::env::set_current_dir(wd)?;
     }
 
@@ -138,7 +142,9 @@ async fn run() -> Result<()> {
         )
         .with_state(markdown_files);
 
-    axum::Server::bind(&"0.0.0.0:4000".parse()?)
+    let socket_addr_string = format!("0.0.0.0:{port}");
+    println!("Binding to {socket_addr_string}");
+    axum::Server::bind(&socket_addr_string.parse()?)
         .serve(app.into_make_service())
         .await?;
 
