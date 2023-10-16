@@ -65,6 +65,7 @@ async fn frontmatter_list_get(
         .map(|file| file.clone().into())
         .collect::<Vec<_>>();
     files.sort();
+    files.reverse();
     Ok(Json(files))
 }
 
