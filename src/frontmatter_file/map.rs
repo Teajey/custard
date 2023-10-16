@@ -24,77 +24,54 @@ impl Map {
     fn process_rename_event(&mut self, path: &UTF8FilePath) {
         let was_removed = self.inner.remove(path).is_some();
         if !was_removed {
-            let new_content = match std::fs::read_to_string(path) {
-                Ok(content) => content,
+            let file = match FrontmatterFile::read_from_path(path) {
+                Ok(file) => file,
                 Err(err) => {
-                    eprintln!("Failed to read file ({path:?}) after a Rename event: {err}");
+                    eprintln!("Couldn't load file ({path:?}) after Create event: {err}");
                     return;
                 }
             };
-            let new_data = match FrontmatterFile::from_string(new_content) {
-                Ok(new_data) => new_data,
-                Err(err) => {
-                    eprintln!("Couldn't read frontmatter during Create event: {err}");
-                    return;
-                }
-            };
-            self.inner.insert(path.clone(), new_data);
+            self.inner.insert(path.clone(), file);
         }
     }
 
     fn process_edit_event(&mut self, path: &UTF8FilePath) {
-        let new_content = match std::fs::read_to_string(path) {
-            Ok(content) => content,
-            Err(err) => {
-                eprintln!("Failed to read file ({path:?}) after a Modify event: {err}");
-                return;
-            }
-        };
-        let Some(data) = self.inner.get_mut(path) else {
-            eprintln!("Tried to get data for a path ({path:?}) that doesn't exist in memory.");
+        let Some(file) = self.inner.get_mut(path) else {
+            eprintln!("Couldn't find ({path:?}) in Edit event.");
             return;
         };
-        let new_data = match FrontmatterFile::from_string(new_content) {
-            Ok(new_data) => new_data,
+        let new_file = match FrontmatterFile::read_from_path(path) {
+            Ok(new_file) => new_file,
             Err(err) => {
-                eprintln!("Couldn't read frontmatter during Modify event: {err}");
+                eprintln!("Couldn't load file ({path:?}) after Edit event: {err}");
                 return;
             }
         };
-        *data = new_data;
+        *file = new_file;
     }
 
     fn process_removal_event(&mut self, path: &UTF8FilePath) {
         let was_removed = self.inner.remove(path).is_some();
         if !was_removed {
-            eprintln!(
-                "Recieved a removal event for a path ({path:?}) that didn't exist in memory."
-            );
+            eprintln!("Couldn't find ({path:?}) in Remove event..");
         }
     }
 
     fn process_create_event(&mut self, path: &UTF8FilePath) {
-        let new_content = match std::fs::read_to_string(path) {
-            Ok(content) => content,
-            Err(err) => {
-                eprintln!("Failed to read file ({path:?}) after a Create event: {err}");
-                return;
-            }
-        };
         if self.inner.contains_key(path) {
             eprintln!(
                 "A Create event occurred for a path ({path:?}) but it already exists in memory."
             );
             return;
         }
-        let new_data = match FrontmatterFile::from_string(new_content) {
-            Ok(new_data) => new_data,
+        let new_file = match FrontmatterFile::read_from_path(path) {
+            Ok(new_file) => new_file,
             Err(err) => {
-                eprintln!("Couldn't read frontmatter during Create event: {err}");
+                eprintln!("Couldn't load file ({path:?}) during Create event: {err}");
                 return;
             }
         };
-        self.inner.insert(path.clone(), new_data);
+        self.inner.insert(path.clone(), new_file);
     }
 }
 

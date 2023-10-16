@@ -17,29 +17,10 @@ use notify::{RecursiveMode, Watcher};
 use frontmatter_file::FrontmatterFile;
 use utf8_filepath::UTF8FilePath;
 
-async fn frontmatter_get_many(
-    State(markdown_files): State<frontmatter_file::map::ArcMutex>,
-) -> Result<Json<Vec<frontmatter_file::Named>>, StatusCode> {
-    let map = markdown_files.0.as_ref();
-    let map = match map.lock() {
-        Ok(map) => map,
-        Err(err) => {
-            eprintln!("Failed to lock data on a get_many request: {err}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-    let files = map
-        .inner
-        .iter()
-        .map(|(path, file)| frontmatter_file::Named::from_map_entry((path, file)))
-        .collect();
-    Ok(Json(files))
-}
-
-async fn frontmatter_post_many(
+async fn frontmatter_query_post(
     State(markdown_files): State<frontmatter_file::map::ArcMutex>,
     Json(query): Json<FrontmatterQuery>,
-) -> Result<Json<Vec<frontmatter_file::Named>>, StatusCode> {
+) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
     let map = markdown_files.0.as_ref();
     let map = match map.lock() {
         Ok(map) => map,
@@ -50,9 +31,9 @@ async fn frontmatter_post_many(
     };
     let files = map
         .inner
-        .iter()
-        .filter(|(_, file)| {
-            let Some(frontmatter) = &file.frontmatter else {
+        .values()
+        .filter(|file| {
+            let Some(frontmatter) = file.frontmatter() else {
                 return query.is_empty();
             };
             query.is_subset(
@@ -62,12 +43,32 @@ async fn frontmatter_post_many(
                 .expect("Map<String, Value> is valid json"),
             )
         })
-        .map(|(path, file)| frontmatter_file::Named::from_map_entry((path, file)))
+        .map(|file| file.clone().into())
         .collect();
     Ok(Json(files))
 }
 
-async fn frontmatter_get_filename(
+async fn frontmatter_list_get(
+    State(markdown_files): State<frontmatter_file::map::ArcMutex>,
+) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
+    let map = markdown_files.0.as_ref();
+    let map = match map.lock() {
+        Ok(map) => map,
+        Err(err) => {
+            eprintln!("Failed to lock data on a get_many request: {err}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    let mut files = map
+        .inner
+        .values()
+        .map(|file| file.clone().into())
+        .collect::<Vec<_>>();
+    files.sort();
+    Ok(Json(files))
+}
+
+async fn frontmatter_file_get(
     State(markdown_files): State<frontmatter_file::map::ArcMutex>,
     Path(name): Path<String>,
 ) -> Result<(HeaderMap, String), StatusCode> {
@@ -81,21 +82,39 @@ async fn frontmatter_get_filename(
     };
     let file = map
         .inner
-        .iter()
-        .find(|(filepath, _)| filepath.name() == name);
-    let Some((_, file)) = file else {
-        return Err(StatusCode::NOT_FOUND);
-    };
+        .values()
+        .find(|file| file.name() == name)
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     let mut headers = HeaderMap::new();
-    let frontmatter_string =
-        serde_json::to_string(&file.frontmatter).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let frontmatter = file.frontmatter();
+    let frontmatter_string = serde_json::to_string(&frontmatter).map_err(|err| {
+        eprintln!(
+            "Failed to serialize frontmatter ({frontmatter:?}) as JSON during get request: {err}"
+        );
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     let frontmatter_header_value = frontmatter_string.parse().map_err(|err| {
         eprintln!("Failed to parse header value ({frontmatter_string:?}): {err}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     headers.insert("x-frontmatter", frontmatter_header_value);
-    Ok((headers, file.body.clone()))
+
+    let created_string = file.created().to_rfc3339();
+    let created_header_value = created_string.parse().map_err(|err| {
+        eprintln!("Failed to parse 'created' header value ({created_string:?}): {err}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    headers.insert("x-created", created_header_value);
+
+    let modified_string = file.modified().to_rfc3339();
+    let modified_header_value = modified_string.parse().map_err(|err| {
+        eprintln!("Failed to parse 'modified' header value ({modified_string:?}): {err}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    headers.insert("x-modified", modified_header_value);
+
+    Ok((headers, file.body().to_owned()))
 }
 
 async fn run() -> Result<()> {
@@ -116,9 +135,7 @@ async fn run() -> Result<()> {
     let markdown_files = markdown_fps
         .into_iter()
         .map(|path| {
-            let string = std::fs::read_to_string(&path)?;
-
-            let md = FrontmatterFile::from_string(string)?;
+            let md = FrontmatterFile::read_from_path(&path)?;
 
             Ok((path, md))
         })
@@ -126,19 +143,16 @@ async fn run() -> Result<()> {
 
     let markdown_files = frontmatter_file::map::ArcMutex::new(markdown_files);
 
-    // Automatically select the best implementation for your platform.
     let mut watcher = notify::recommended_watcher(markdown_files.clone())?;
 
-    // Add a path to be watched. All files and directories at that path and
-    // below will be monitored for changes.
     watcher.watch(&current_dir, RecursiveMode::NonRecursive)?;
 
     let app = Router::new()
-        .route("/frontmatter/many", routing::post(frontmatter_post_many))
-        .route("/frontmatter/many", routing::get(frontmatter_get_many))
+        .route("/frontmatter/query", routing::post(frontmatter_query_post))
+        .route("/frontmatter/list", routing::get(frontmatter_list_get))
         .route(
-            "/frontmatter/filename/:name",
-            routing::get(frontmatter_get_filename),
+            "/frontmatter/file/:name",
+            routing::get(frontmatter_file_get),
         )
         .with_state(markdown_files);
 
