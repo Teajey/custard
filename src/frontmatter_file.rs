@@ -20,6 +20,7 @@ pub struct FrontmatterFile {
 pub struct Short {
     name: String,
     frontmatter: Option<serde_yaml::Mapping>,
+    has_body: bool,
     modified: DateTime<Utc>,
     created: DateTime<Utc>,
 }
@@ -41,7 +42,7 @@ impl From<FrontmatterFile> for Short {
         FrontmatterFile {
             name,
             frontmatter,
-            body: _,
+            body,
             modified,
             created,
         }: FrontmatterFile,
@@ -49,6 +50,7 @@ impl From<FrontmatterFile> for Short {
         Self {
             name,
             frontmatter,
+            has_body: !body.is_empty(),
             modified,
             created,
         }
