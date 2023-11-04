@@ -59,8 +59,8 @@ impl From<FrontmatterFile> for Short {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReadFromPathError {
-    #[error("Failed to parse frontmatter: {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    #[error("Failed to parse frontmatter for '{0}': {1}")]
+    Yaml(String, serde_yaml::Error),
     #[error("Failed to load: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -115,7 +115,8 @@ impl FrontmatterFile {
             return Ok(md);
         };
 
-        let frontmatter = serde_yaml::from_str(frontmatter)?;
+        let frontmatter = serde_yaml::from_str(frontmatter)
+            .map_err(|err| ReadFromPathError::Yaml(name.clone(), err))?;
 
         Ok(FrontmatterFile {
             name,
