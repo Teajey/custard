@@ -77,7 +77,7 @@ async fn frontmatter_file_get(
     let map = match map.lock() {
         Ok(map) => map,
         Err(err) => {
-            eprintln!("Failed to lock data on a get_one request: {err}");
+            eprintln!("Failed to lock data on a get_file request: {err}");
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
@@ -118,6 +118,41 @@ async fn frontmatter_file_get(
     Ok((headers, file.body().to_owned()))
 }
 
+async fn frontmatter_collate_strings_get(
+    State(markdown_files): State<frontmatter_file::map::ArcMutex>,
+    Path(key): Path<String>,
+) -> Result<Json<Vec<String>>, StatusCode> {
+    let map = markdown_files.0.as_ref();
+    let map = match map.lock() {
+        Ok(map) => map,
+        Err(err) => {
+            eprintln!("Failed to lock data on a get_collate_strings request: {err}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    let mut values = map
+        .inner
+        .values()
+        .filter_map(|fmf| fmf.frontmatter())
+        .filter_map(|fm| fm.get(&key))
+        .filter_map(|v| match v {
+            serde_yaml::Value::String(v) => Some(vec![v.clone()]),
+            serde_yaml::Value::Sequence(seq) => seq
+                .iter()
+                .map(|v| match v {
+                    serde_yaml::Value::String(v) => Some(v.clone()),
+                    _ => None,
+                })
+                .collect(),
+            _ => None,
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+    values.sort();
+    values.dedup();
+    Ok(Json(values))
+}
+
 async fn run() -> Result<()> {
     let mut args = std::env::args();
     let port = args
@@ -154,6 +189,10 @@ async fn run() -> Result<()> {
         .route(
             "/frontmatter/file/:name",
             routing::get(frontmatter_file_get),
+        )
+        .route(
+            "/frontmatter/collate_strings/:key",
+            routing::get(frontmatter_collate_strings_get),
         )
         .with_state(markdown_files);
 
