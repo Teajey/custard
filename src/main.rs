@@ -29,7 +29,7 @@ async fn frontmatter_query_post(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
-    let files = map
+    let mut files = map
         .inner
         .values()
         .filter(|file| {
@@ -44,7 +44,9 @@ async fn frontmatter_query_post(
             )
         })
         .map(|file| file.clone().into())
-        .collect();
+        .collect::<Vec<_>>();
+    files.sort();
+    files.reverse();
     Ok(Json(files))
 }
 
