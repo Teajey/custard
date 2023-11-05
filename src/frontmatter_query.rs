@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::Number;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum Scalar {
     String(String),
@@ -24,7 +24,7 @@ impl Scalar {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum QueryValue {
     Vec(Vec<Scalar>),
@@ -35,7 +35,7 @@ impl QueryValue {
     pub fn is_subset(&self, fm_value: &serde_json::Value) -> bool {
         match (self, fm_value) {
             (QueryValue::Vec(vec), serde_json::Value::Array(fm_vec)) => {
-                vec.iter().zip(fm_vec.iter()).all(|(s, fm)| s.matches(fm))
+                vec.iter().all(|s| fm_vec.iter().any(|fm| s.matches(fm)))
             }
             (QueryValue::Scalar(scalar), fm_scalar) => scalar.matches(fm_scalar),
             _ => false,
@@ -43,7 +43,7 @@ impl QueryValue {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct FrontmatterQuery(HashMap<String, QueryValue>);
 
 impl FrontmatterQuery {
@@ -86,5 +86,21 @@ mod test {
 
         assert!(frontmatter_query
             .is_subset(&deserial!({ "1": "this went in my mouth", "salty": "pork" })));
+    }
+
+    mod query_value {
+        use super::{
+            super::{QueryValue, Scalar},
+            json,
+        };
+        #[test]
+        fn is_subset() {
+            let a = QueryValue::Vec(vec![Scalar::String("dis".to_owned())]);
+            let b = json!(["dis", "a", "test", "gotta", "add", "more", "tags!"]);
+            assert!(a.is_subset(&b), "first element match");
+
+            let a = QueryValue::Vec(vec![Scalar::String("gotta".to_owned())]);
+            assert!(a.is_subset(&b), "later element match");
+        }
     }
 }
