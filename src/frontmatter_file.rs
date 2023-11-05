@@ -20,7 +20,7 @@ pub struct FrontmatterFile {
 pub struct Short {
     name: String,
     frontmatter: Option<serde_yaml::Mapping>,
-    has_body: bool,
+    one_liner: Option<String>,
     modified: DateTime<Utc>,
     created: DateTime<Utc>,
 }
@@ -47,10 +47,16 @@ impl From<FrontmatterFile> for Short {
             created,
         }: FrontmatterFile,
     ) -> Self {
+        let lines = body.trim().split('\n').collect::<Vec<_>>();
+        let one_liner = if lines.len() == 1 {
+            Some(lines[0].to_owned())
+        } else {
+            None
+        };
         Self {
             name,
             frontmatter,
-            has_body: !body.is_empty(),
+            one_liner,
             modified,
             created,
         }
