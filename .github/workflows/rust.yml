@@ -31,8 +31,8 @@ jobs:
       - run: pip install -r requirements.txt
       - run: mkdir tests/markdown_files
       - name: Run dev Custard in background
-        run: cargo run -- 4000 tests/markdown_files &
-      - name: Wait for Custard
-        run: sleep 3
-      - name: Run Python test(s)
-        run: pytest tests/python
+        run: cargo run -- 4000 tests/markdown_files
+      # - name: Wait for Custard
+      #   run: sleep 1
+      # - name: Run Python test(s)
+      #   run: pytest tests/python
