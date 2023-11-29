@@ -1,11 +1,11 @@
-pub mod map;
+pub mod keeper;
 
 use anyhow::Result;
+use camino::{Utf8Path as Path, Utf8PathBuf};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use crate::utf8_filepath::UTF8FilePath;
-pub use map::Map;
+pub use keeper::Keeper;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FrontmatterFile {
@@ -69,6 +69,8 @@ pub enum ReadFromPathError {
     Yaml(String, serde_yaml::Error),
     #[error("Failed to load: {0}")]
     Io(#[from] std::io::Error),
+    #[error("Tried to read from path with no file name: {0}")]
+    NoFileNamePath(Utf8PathBuf),
 }
 
 impl FrontmatterFile {
@@ -92,8 +94,11 @@ impl FrontmatterFile {
         &self.modified
     }
 
-    pub fn read_from_path(path: &UTF8FilePath) -> Result<Self, ReadFromPathError> {
-        let name = path.name().to_owned();
+    pub fn read_from_path(path: &Path) -> Result<Self, ReadFromPathError> {
+        let name = path
+            .file_name()
+            .ok_or_else(|| ReadFromPathError::NoFileNamePath(path.to_path_buf()))?
+            .to_owned();
         let metadata = std::fs::metadata(path)?;
         let modified = metadata.modified()?.into();
         let created = metadata.created()?.into();
