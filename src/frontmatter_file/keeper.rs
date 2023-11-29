@@ -9,6 +9,31 @@ use crate::fs::{self, path_has_extensions};
 
 use super::FrontmatterFile;
 
+// Let's keep the possible events simpler for our needs
+#[derive(Debug, PartialEq)]
+enum FsEvent {
+    Rename,
+    Edit,
+    Create,
+    Delete,
+    Unhandled(notify::EventKind),
+}
+
+impl From<notify::EventKind> for FsEvent {
+    fn from(event_kind: notify::EventKind) -> Self {
+        use notify::event::{
+            CreateKind, DataChange, EventKind, ModifyKind, RemoveKind, RenameMode,
+        };
+        match event_kind {
+            EventKind::Modify(ModifyKind::Name(RenameMode::Any)) => Self::Rename,
+            EventKind::Modify(ModifyKind::Data(DataChange::Content)) => Self::Edit,
+            EventKind::Remove(RemoveKind::File) => Self::Delete,
+            EventKind::Create(CreateKind::File) => Self::Create,
+            unhandled => Self::Unhandled(unhandled),
+        }
+    }
+}
+
 pub struct Keeper {
     inner: HashMap<Utf8PathBuf, FrontmatterFile>,
 }
@@ -38,15 +63,6 @@ impl Keeper {
 
     pub fn files(&self) -> Values<'_, Utf8PathBuf, FrontmatterFile> {
         self.inner.values()
-    }
-}
-
-#[derive(Clone)]
-pub struct ArcMutex(pub Arc<Mutex<Keeper>>);
-
-impl ArcMutex {
-    pub fn new(keeper: Keeper) -> Self {
-        Self(Arc::new(Mutex::new(keeper)))
     }
 }
 
@@ -105,6 +121,15 @@ impl Keeper {
     }
 }
 
+#[derive(Clone)]
+pub struct ArcMutex(pub Arc<Mutex<Keeper>>);
+
+impl ArcMutex {
+    pub fn new(keeper: Keeper) -> Self {
+        Self(Arc::new(Mutex::new(keeper)))
+    }
+}
+
 impl notify::EventHandler for ArcMutex {
     fn handle_event(&mut self, event: notify::Result<notify::Event>) {
         match event {
@@ -131,24 +156,20 @@ impl notify::EventHandler for ArcMutex {
                         return;
                     }
                 };
-                match kind {
-                    notify::EventKind::Modify(notify::event::ModifyKind::Name(
-                        notify::event::RenameMode::Any,
-                    )) => {
+                match FsEvent::from(kind) {
+                    FsEvent::Rename => {
                         map.process_rename_event(&path);
                     }
-                    notify::EventKind::Modify(notify::event::ModifyKind::Data(
-                        notify::event::DataChange::Content,
-                    )) => {
+                    FsEvent::Edit => {
                         map.process_edit_event(&path);
                     }
-                    notify::EventKind::Remove(notify::event::RemoveKind::File) => {
+                    FsEvent::Delete => {
                         map.process_removal_event(&path);
                     }
-                    notify::EventKind::Create(notify::event::CreateKind::File) => {
+                    FsEvent::Create => {
                         map.process_create_event(&path);
                     }
-                    event => println!("unhandled watch event: {event:?}"),
+                    FsEvent::Unhandled(event) => println!("unhandled watch event: {event:?}"),
                 }
             }
             Err(e) => println!("watch error: {e:?}"),
@@ -162,6 +183,8 @@ mod test {
 
     use camino::Utf8PathBuf;
     use notify::{EventHandler, RecursiveMode, Watcher};
+
+    use crate::frontmatter_file::keeper::FsEvent;
 
     use super::{ArcMutex, Keeper};
 
@@ -219,7 +242,7 @@ mod test {
                 match event {
                     Ok(event) => {
                         keeper_mut.handle_event(Ok(event.clone()));
-                        tx_clone.send(Ok(event)).unwrap();
+                        tx_clone.send(Ok(FsEvent::from(event.kind))).unwrap();
                     }
                     Err(err) => {
                         keeper_mut.handle_event(Err(err));
@@ -242,30 +265,16 @@ mod test {
         test_file.generate().unwrap();
 
         let event = rx.recv().unwrap().unwrap();
-        pretty_assertions::assert_eq!(
-            notify::EventKind::Create(notify::event::CreateKind::File),
-            event.kind,
-            "Expecting a file create event"
-        );
+        pretty_assertions::assert_eq!(FsEvent::Create, event);
 
         let first_line = "Just call me Mark!\n";
         test_file.write(first_line).unwrap();
 
         let event = rx.recv().unwrap().unwrap();
-        pretty_assertions::assert_eq!(
-            notify::EventKind::Create(notify::event::CreateKind::File),
-            event.kind,
-            "Expecting a file create event"
-        );
+        pretty_assertions::assert_eq!(FsEvent::Create, event);
 
         let event = rx.recv().unwrap().unwrap();
-        pretty_assertions::assert_eq!(
-            notify::EventKind::Modify(notify::event::ModifyKind::Data(
-                notify::event::DataChange::Content
-            )),
-            event.kind,
-            "Expecting a content modification event"
-        );
+        pretty_assertions::assert_eq!(FsEvent::Edit, event);
 
         {
             let keeper = keeper.0.as_ref().lock().unwrap();
@@ -280,20 +289,10 @@ mod test {
         test_file.write(second_line).unwrap();
 
         let event = rx.recv().unwrap().unwrap();
-        pretty_assertions::assert_eq!(
-            notify::EventKind::Create(notify::event::CreateKind::File),
-            event.kind,
-            "Expecting a create event"
-        );
+        pretty_assertions::assert_eq!(FsEvent::Create, event);
 
         let event = rx.recv().unwrap().unwrap();
-        pretty_assertions::assert_eq!(
-            notify::EventKind::Modify(notify::event::ModifyKind::Data(
-                notify::event::DataChange::Content
-            )),
-            event.kind,
-            "Expecting a content modification event"
-        );
+        pretty_assertions::assert_eq!(FsEvent::Edit, event);
 
         {
             let keeper = keeper.0.as_ref().lock().unwrap();
@@ -307,18 +306,10 @@ mod test {
         test_file.delete().unwrap();
 
         let event = rx.recv().unwrap().unwrap();
-        pretty_assertions::assert_eq!(
-            notify::EventKind::Create(notify::event::CreateKind::File),
-            event.kind,
-            "Expecting a create event"
-        );
+        pretty_assertions::assert_eq!(FsEvent::Create, event);
 
         let event = rx.recv().unwrap().unwrap();
-        pretty_assertions::assert_eq!(
-            notify::EventKind::Remove(notify::event::RemoveKind::File),
-            event.kind,
-            "Expecting a file delete event"
-        );
+        pretty_assertions::assert_eq!(FsEvent::Delete, event);
 
         {
             let keeper = keeper.0.as_ref().lock().unwrap();
