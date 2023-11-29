@@ -33,6 +33,6 @@ jobs:
       - name: Run dev Custard in background
         run: cargo run -- 4000 tests/markdown_files &
       - name: Wait for Custard
-        run: sleep 1
+        run: sleep 2
       - name: Run Python test(s)
         run: pytest tests/python
