@@ -156,3 +156,174 @@ impl notify::EventHandler for ArcMutex {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use std::io::Write;
+
+    use camino::Utf8PathBuf;
+    use notify::{EventHandler, RecursiveMode, Watcher};
+
+    use super::{ArcMutex, Keeper};
+
+    struct TestFile {
+        path: Utf8PathBuf,
+    }
+
+    impl TestFile {
+        fn generate(&self) -> std::io::Result<()> {
+            let _ = std::fs::File::create(&self.path)?;
+            Ok(())
+        }
+
+        fn write<T: std::fmt::Display>(&self, str: T) -> std::io::Result<()> {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .append(true)
+                .open(&self.path)?;
+
+            write!(file, "{str}")?;
+
+            Ok(())
+        }
+
+        fn delete(&self) -> std::io::Result<()> {
+            std::fs::remove_file(&self.path)
+        }
+    }
+
+    impl Drop for TestFile {
+        fn drop(&mut self) {
+            if self.path.exists() {
+                std::fs::remove_file(&self.path).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn file_monitoring() {
+        let test_file_name = "test.md";
+        let wd = Utf8PathBuf::try_from(std::env::temp_dir()).unwrap();
+        let test_file_path = wd.join(test_file_name);
+        let test_file = TestFile {
+            path: test_file_path,
+        };
+        let keeper = ArcMutex::new(Keeper::new(&wd).unwrap());
+
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        let mut keeper_mut = keeper.clone();
+        let tx_clone = tx.clone();
+        let mut watcher =
+            notify::recommended_watcher(move |event: Result<notify::Event, notify::Error>| {
+                match event {
+                    Ok(event) => {
+                        keeper_mut.handle_event(Ok(event.clone()));
+                        tx_clone.send(Ok(event)).unwrap();
+                    }
+                    Err(err) => {
+                        keeper_mut.handle_event(Err(err));
+                        tx_clone.send(Err(())).unwrap();
+                    }
+                }
+            })
+            .unwrap();
+
+        watcher
+            .watch(wd.as_std_path(), RecursiveMode::NonRecursive)
+            .unwrap();
+
+        {
+            let keeper = keeper.0.as_ref().lock().unwrap();
+            let file = keeper.files().find(|file| file.name() == test_file_name);
+            assert!(file.is_none());
+        }
+
+        test_file.generate().unwrap();
+
+        let event = rx.recv().unwrap().unwrap();
+        pretty_assertions::assert_eq!(
+            notify::EventKind::Create(notify::event::CreateKind::File),
+            event.kind,
+            "Expecting a file create event"
+        );
+
+        let first_line = "Just call me Mark!\n";
+        test_file.write(first_line).unwrap();
+
+        let event = rx.recv().unwrap().unwrap();
+        pretty_assertions::assert_eq!(
+            notify::EventKind::Create(notify::event::CreateKind::File),
+            event.kind,
+            "Expecting a file create event"
+        );
+
+        let event = rx.recv().unwrap().unwrap();
+        pretty_assertions::assert_eq!(
+            notify::EventKind::Modify(notify::event::ModifyKind::Data(
+                notify::event::DataChange::Content
+            )),
+            event.kind,
+            "Expecting a content modification event"
+        );
+
+        {
+            let keeper = keeper.0.as_ref().lock().unwrap();
+            let file = keeper
+                .files()
+                .find(|file| file.name() == test_file_name)
+                .expect("Keeper should have file now");
+            assert_eq!(first_line, file.body);
+        }
+
+        let second_line = "I'm a markdown file!\n";
+        test_file.write(second_line).unwrap();
+
+        let event = rx.recv().unwrap().unwrap();
+        pretty_assertions::assert_eq!(
+            notify::EventKind::Create(notify::event::CreateKind::File),
+            event.kind,
+            "Expecting a create event"
+        );
+
+        let event = rx.recv().unwrap().unwrap();
+        pretty_assertions::assert_eq!(
+            notify::EventKind::Modify(notify::event::ModifyKind::Data(
+                notify::event::DataChange::Content
+            )),
+            event.kind,
+            "Expecting a content modification event"
+        );
+
+        {
+            let keeper = keeper.0.as_ref().lock().unwrap();
+            let file = keeper
+                .files()
+                .find(|file| file.name() == test_file_name)
+                .unwrap();
+            assert_eq!([first_line, second_line].join(""), file.body);
+        }
+
+        test_file.delete().unwrap();
+
+        let event = rx.recv().unwrap().unwrap();
+        pretty_assertions::assert_eq!(
+            notify::EventKind::Create(notify::event::CreateKind::File),
+            event.kind,
+            "Expecting a create event"
+        );
+
+        let event = rx.recv().unwrap().unwrap();
+        pretty_assertions::assert_eq!(
+            notify::EventKind::Remove(notify::event::RemoveKind::File),
+            event.kind,
+            "Expecting a file delete event"
+        );
+
+        {
+            let keeper = keeper.0.as_ref().lock().unwrap();
+            let file = keeper.files().find(|file| file.name() == test_file_name);
+            assert!(file.is_none());
+        }
+    }
+}
