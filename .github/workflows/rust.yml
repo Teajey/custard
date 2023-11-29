@@ -29,7 +29,6 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: mkdir tests/markdown_files
-      - run: pip install pytest
       - name: Run dev Custard in background
         run: cargo run -- 4000 tests/markdown_files &
       - name: Run Python test(s)
