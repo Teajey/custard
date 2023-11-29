@@ -17,6 +17,10 @@ use notify::{RecursiveMode, Watcher};
 use frontmatter_file::FrontmatterFile;
 use utf8_filepath::UTF8FilePath;
 
+async fn health() -> Result<(), StatusCode> {
+    Ok(())
+}
+
 async fn frontmatter_query_post(
     State(markdown_files): State<frontmatter_file::map::ArcMutex>,
     Json(query): Json<FrontmatterQuery>,
@@ -186,6 +190,7 @@ async fn run() -> Result<()> {
     watcher.watch(&current_dir, RecursiveMode::NonRecursive)?;
 
     let app = Router::new()
+        .route("/health", routing::get(health))
         .route("/frontmatter/query", routing::post(frontmatter_query_post))
         .route("/frontmatter/list", routing::get(frontmatter_list_get))
         .route(
