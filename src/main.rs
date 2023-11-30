@@ -1,9 +1,6 @@
 mod frontmatter_file;
 mod frontmatter_query;
 mod fs;
-mod utf8_filepath;
-
-use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use axum::{
@@ -11,27 +8,20 @@ use axum::{
     http::{HeaderMap, StatusCode},
     routing, Json, Router,
 };
+use camino::Utf8PathBuf;
 use frontmatter_query::FrontmatterQuery;
 use notify::{RecursiveMode, Watcher};
 
-use frontmatter_file::FrontmatterFile;
-use utf8_filepath::UTF8FilePath;
-
 async fn frontmatter_query_post(
-    State(markdown_files): State<frontmatter_file::map::ArcMutex>,
+    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
     Json(query): Json<FrontmatterQuery>,
 ) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
-    let map = markdown_files.0.as_ref();
-    let map = match map.lock() {
-        Ok(map) => map,
-        Err(err) => {
-            eprintln!("Failed to lock data on a get_many request: {err}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-    let mut files = map
-        .inner
-        .values()
+    let keeper = markdown_files.0.as_ref().lock().map_err(|err| {
+        eprintln!("Failed to lock data on a get_many request: {err}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let mut files = keeper
+        .files()
         .filter(|file| {
             let Some(frontmatter) = file.frontmatter() else {
                 return query.is_empty();
@@ -51,19 +41,14 @@ async fn frontmatter_query_post(
 }
 
 async fn frontmatter_list_get(
-    State(markdown_files): State<frontmatter_file::map::ArcMutex>,
+    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
 ) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
-    let map = markdown_files.0.as_ref();
-    let map = match map.lock() {
-        Ok(map) => map,
-        Err(err) => {
-            eprintln!("Failed to lock data on a get_many request: {err}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-    let mut files = map
-        .inner
-        .values()
+    let keeper = markdown_files.0.as_ref().lock().map_err(|err| {
+        eprintln!("Failed to lock data on a get_many request: {err}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let mut files = keeper
+        .files()
         .map(|file| file.clone().into())
         .collect::<Vec<_>>();
     files.sort();
@@ -72,20 +57,15 @@ async fn frontmatter_list_get(
 }
 
 async fn frontmatter_file_get(
-    State(markdown_files): State<frontmatter_file::map::ArcMutex>,
+    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
     Path(name): Path<String>,
 ) -> Result<(HeaderMap, String), StatusCode> {
-    let map = markdown_files.0.as_ref();
-    let map = match map.lock() {
-        Ok(map) => map,
-        Err(err) => {
-            eprintln!("Failed to lock data on a get_file request: {err}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-    let file = map
-        .inner
-        .values()
+    let keeper = markdown_files.0.as_ref().lock().map_err(|err| {
+        eprintln!("Failed to lock data on a get_file request: {err}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let file = keeper
+        .files()
         .find(|file| file.name() == name)
         .ok_or(StatusCode::NOT_FOUND)?;
 
@@ -121,20 +101,15 @@ async fn frontmatter_file_get(
 }
 
 async fn frontmatter_collate_strings_get(
-    State(markdown_files): State<frontmatter_file::map::ArcMutex>,
+    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
     Path(key): Path<String>,
 ) -> Result<Json<Vec<String>>, StatusCode> {
-    let map = markdown_files.0.as_ref();
-    let map = match map.lock() {
-        Ok(map) => map,
-        Err(err) => {
-            eprintln!("Failed to lock data on a get_collate_strings request: {err}");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-    let mut values = map
-        .inner
-        .values()
+    let keeper = markdown_files.0.as_ref().lock().map_err(|err| {
+        eprintln!("Failed to lock data on a get_collate_strings request: {err}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let mut values = keeper
+        .files()
         .filter_map(|fmf| fmf.frontmatter())
         .filter_map(|fm| fm.get(&key))
         .filter_map(|v| match v {
@@ -165,25 +140,15 @@ async fn run() -> Result<()> {
     }
 
     let current_dir = std::env::current_dir()?;
-    let markdown_fps = fs::filepaths_with_extensions(&current_dir, &["md"])?
-        .into_iter()
-        .map(UTF8FilePath::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| anyhow!("Target paths are not all UTF-8 files: {err}"))?;
-    let markdown_files = markdown_fps
-        .into_iter()
-        .map(|path| {
-            let md = FrontmatterFile::read_from_path(&path)?;
+    let current_dir = Utf8PathBuf::try_from(current_dir)?;
 
-            Ok((path, md))
-        })
-        .collect::<Result<HashMap<_, _>>>()?;
+    let keeper = frontmatter_file::Keeper::new(&current_dir)?;
 
-    let markdown_files = frontmatter_file::map::ArcMutex::new(markdown_files);
+    let markdown_files = frontmatter_file::keeper::ArcMutex::new(keeper);
 
     let mut watcher = notify::recommended_watcher(markdown_files.clone())?;
 
-    watcher.watch(&current_dir, RecursiveMode::NonRecursive)?;
+    watcher.watch(current_dir.as_std_path(), RecursiveMode::NonRecursive)?;
 
     let app = Router::new()
         .route("/frontmatter/query", routing::post(frontmatter_query_post))
