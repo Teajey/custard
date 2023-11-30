@@ -28,7 +28,9 @@ impl From<notify::EventKind> for FsEvent {
         };
         match event_kind {
             EventKind::Modify(ModifyKind::Name(RenameMode::Any)) => Self::Rename,
-            EventKind::Modify(ModifyKind::Data(DataChange::Content)) => Self::Edit,
+            EventKind::Modify(ModifyKind::Data(DataChange::Content | DataChange::Any)) => {
+                Self::Edit
+            }
             EventKind::Remove(RemoveKind::File) => Self::Delete,
             EventKind::Create(CreateKind::File) => Self::Create,
             EventKind::Access(AccessKind::Close(AccessMode::Write)) => Self::Ignored,
