@@ -8,10 +8,10 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_FLAGS: "-Dwarnings"
+  RUSTFLAGS: "-Dwarnings"
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-20.04
 
     steps:
@@ -25,7 +25,36 @@ jobs:
           key: build-${{ runner.os }}
           restore-keys: |
             build-${{ runner.os }}
-      - name: Lint
-        run: cargo clippy --all-targets
-      - name: Test
-        run: cargo test
+      - run: cargo build
+  lint:
+    needs: build
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache
+        uses: actions/cache@v3.2.6
+        with:
+          path: |
+            ~/.cargo
+            target
+          key: build-${{ runner.os }}
+          restore-keys: |
+            build-${{ runner.os }}
+      - run: cargo clippy --all-targets
+  test:
+    needs: build
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache
+        uses: actions/cache@v3.2.6
+        with:
+          path: |
+            ~/.cargo
+            target
+          key: build-${{ runner.os }}
+          restore-keys: |
+            build-${{ runner.os }}
+      - run: cargo test
