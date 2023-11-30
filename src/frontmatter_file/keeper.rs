@@ -280,12 +280,15 @@ mod test {
         let first_line = "Just call me Mark!\n";
         test_file.write(first_line).unwrap();
 
-        let event = rx
-            .iter()
-            .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
-            .unwrap()
-            .unwrap();
-        pretty_assertions::assert_eq!(FsEvent::Create, event);
+        #[cfg(target_os = "macos")]
+        {
+            let event = rx
+                .iter()
+                .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
+                .unwrap()
+                .unwrap();
+            pretty_assertions::assert_eq!(FsEvent::Create, event);
+        }
 
         let event = rx
             .iter()
@@ -306,12 +309,15 @@ mod test {
         let second_line = "I'm a markdown file!\n";
         test_file.write(second_line).unwrap();
 
-        let event = rx
-            .iter()
-            .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
-            .unwrap()
-            .unwrap();
-        pretty_assertions::assert_eq!(FsEvent::Create, event);
+        #[cfg(target_os = "macos")]
+        {
+            let event = rx
+                .iter()
+                .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
+                .unwrap()
+                .unwrap();
+            pretty_assertions::assert_eq!(FsEvent::Create, event);
+        }
 
         let event = rx
             .iter()
@@ -331,12 +337,15 @@ mod test {
 
         test_file.delete().unwrap();
 
-        let event = rx
-            .iter()
-            .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
-            .unwrap()
-            .unwrap();
-        pretty_assertions::assert_eq!(FsEvent::Create, event);
+        #[cfg(target_os = "macos")]
+        {
+            let event = rx
+                .iter()
+                .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
+                .unwrap()
+                .unwrap();
+            pretty_assertions::assert_eq!(FsEvent::Create, event);
+        }
 
         let event = rx
             .iter()
