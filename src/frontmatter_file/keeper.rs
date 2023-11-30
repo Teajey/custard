@@ -16,19 +16,22 @@ enum FsEvent {
     Edit,
     Create,
     Delete,
+    Ignored,
     Unhandled(notify::EventKind),
 }
 
 impl From<notify::EventKind> for FsEvent {
     fn from(event_kind: notify::EventKind) -> Self {
         use notify::event::{
-            CreateKind, DataChange, EventKind, ModifyKind, RemoveKind, RenameMode,
+            AccessKind, AccessMode, CreateKind, DataChange, EventKind, ModifyKind, RemoveKind,
+            RenameMode,
         };
         match event_kind {
             EventKind::Modify(ModifyKind::Name(RenameMode::Any)) => Self::Rename,
             EventKind::Modify(ModifyKind::Data(DataChange::Content)) => Self::Edit,
             EventKind::Remove(RemoveKind::File) => Self::Delete,
             EventKind::Create(CreateKind::File) => Self::Create,
+            EventKind::Access(AccessKind::Close(AccessMode::Write)) => Self::Ignored,
             unhandled => Self::Unhandled(unhandled),
         }
     }
@@ -169,6 +172,7 @@ impl notify::EventHandler for ArcMutex {
                     FsEvent::Create => {
                         map.process_create_event(&path);
                     }
+                    FsEvent::Ignored => (),
                     FsEvent::Unhandled(event) => println!("unhandled watch event: {event:?}"),
                 }
             }
@@ -264,16 +268,28 @@ mod test {
 
         test_file.generate().unwrap();
 
-        let event = rx.recv().unwrap().unwrap();
+        let event = rx
+            .iter()
+            .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
+            .unwrap()
+            .unwrap();
         pretty_assertions::assert_eq!(FsEvent::Create, event);
 
         let first_line = "Just call me Mark!\n";
         test_file.write(first_line).unwrap();
 
-        let event = rx.recv().unwrap().unwrap();
+        let event = rx
+            .iter()
+            .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
+            .unwrap()
+            .unwrap();
         pretty_assertions::assert_eq!(FsEvent::Create, event);
 
-        let event = rx.recv().unwrap().unwrap();
+        let event = rx
+            .iter()
+            .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
+            .unwrap()
+            .unwrap();
         pretty_assertions::assert_eq!(FsEvent::Edit, event);
 
         {
@@ -288,10 +304,18 @@ mod test {
         let second_line = "I'm a markdown file!\n";
         test_file.write(second_line).unwrap();
 
-        let event = rx.recv().unwrap().unwrap();
+        let event = rx
+            .iter()
+            .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
+            .unwrap()
+            .unwrap();
         pretty_assertions::assert_eq!(FsEvent::Create, event);
 
-        let event = rx.recv().unwrap().unwrap();
+        let event = rx
+            .iter()
+            .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
+            .unwrap()
+            .unwrap();
         pretty_assertions::assert_eq!(FsEvent::Edit, event);
 
         {
@@ -305,10 +329,18 @@ mod test {
 
         test_file.delete().unwrap();
 
-        let event = rx.recv().unwrap().unwrap();
+        let event = rx
+            .iter()
+            .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
+            .unwrap()
+            .unwrap();
         pretty_assertions::assert_eq!(FsEvent::Create, event);
 
-        let event = rx.recv().unwrap().unwrap();
+        let event = rx
+            .iter()
+            .find(|event| !matches!(event, Ok(FsEvent::Ignored)))
+            .unwrap()
+            .unwrap();
         pretty_assertions::assert_eq!(FsEvent::Delete, event);
 
         {
