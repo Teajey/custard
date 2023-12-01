@@ -2,9 +2,11 @@ mod frontmatter_file;
 mod frontmatter_query;
 mod fs;
 
+use std::collections::HashMap;
+
 use anyhow::{anyhow, Result};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     routing, Json, Router,
 };
@@ -14,6 +16,7 @@ use notify::{RecursiveMode, Watcher};
 
 async fn frontmatter_query_post(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
+    params: Query<HashMap<String, String>>,
     Json(query): Json<FrontmatterQuery>,
 ) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
     let keeper = markdown_files.0.as_ref().lock().map_err(|err| {
@@ -35,7 +38,32 @@ async fn frontmatter_query_post(
         })
         .map(|file| file.clone().into())
         .collect::<Vec<_>>();
-    files.sort();
+    let sort_key = params.get("sort");
+    if let Some(sort_key) = sort_key {
+        files.sort_by(|f: &frontmatter_file::Short, g| {
+            let f_value = f
+                .get_frontmatter_value(sort_key)
+                .map(serde_yaml::to_string)
+                .transpose()
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    serde_yaml::to_string(&f.created).expect("DateTime<Utc> must serialize")
+                });
+            let g_value = g
+                .get_frontmatter_value(sort_key)
+                .map(serde_yaml::to_string)
+                .transpose()
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    serde_yaml::to_string(&g.created).expect("DateTime<Utc> must serialize")
+                });
+            f_value.cmp(&g_value)
+        });
+    } else {
+        files.sort();
+    }
     files.reverse();
     Ok(Json(files))
 }

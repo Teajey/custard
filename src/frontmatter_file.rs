@@ -16,13 +16,19 @@ pub struct FrontmatterFile {
     created: DateTime<Utc>,
 }
 
-#[derive(Serialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct Short {
     name: String,
     frontmatter: Option<serde_yaml::Mapping>,
     one_liner: Option<String>,
     modified: DateTime<Utc>,
-    created: DateTime<Utc>,
+    pub created: DateTime<Utc>,
+}
+
+impl Short {
+    pub fn get_frontmatter_value<'a>(&'a self, key: &str) -> Option<&'a serde_yaml::Value> {
+        self.frontmatter.as_ref().and_then(|fm| fm.get(key))
+    }
 }
 
 impl PartialOrd for Short {
