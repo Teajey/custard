@@ -7,13 +7,29 @@ use axum::{
     Json,
 };
 
-use crate::frontmatter_file;
-use crate::markup;
-use crate::FrontmatterQuery;
+use crate::{
+    frontmatter_file::{self, Short},
+    frontmatter_query::FrontmatterQuery,
+    get_sort_value, markup,
+};
 
-use super::get_sort_value;
+pub async fn get(
+    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
+) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
+    let keeper = markdown_files.0.as_ref().lock().map_err(|err| {
+        eprintln!("Failed to lock data on a get_many request: {err}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let mut files = keeper
+        .files()
+        .map(|file| file.clone().into())
+        .collect::<Vec<_>>();
+    files.sort();
+    files.reverse();
+    Ok(Json(files))
+}
 
-pub async fn run(
+pub async fn post(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
     params: Query<HashMap<String, String>>,
     Json(query): Json<FrontmatterQuery>,
@@ -38,9 +54,9 @@ pub async fn run(
     let sort_key = params.get("sort");
 
     if let Some(sort_key) = sort_key {
-        files.sort_by(|f: &frontmatter_file::Short, g| {
-            let f_value = get_sort_value(f, sort_key);
-            let g_value = get_sort_value(g, sort_key);
+        files.sort_by(|f: &Short, g| {
+            let f_value = get_sort_value(f.frontmatter.as_ref(), sort_key, &f.created);
+            let g_value = get_sort_value(g.frontmatter.as_ref(), sort_key, &g.created);
             f_value.cmp(&g_value)
         });
     } else {

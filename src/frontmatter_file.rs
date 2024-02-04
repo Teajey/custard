@@ -37,12 +37,6 @@ pub struct Short {
     pub created: DateTime<Utc>,
 }
 
-impl Short {
-    pub fn get_frontmatter_value<'a>(&'a self, key: &str) -> Option<&'a serde_yaml::Value> {
-        self.frontmatter.as_ref().and_then(|fm| fm.get(key))
-    }
-}
-
 impl PartialOrd for Short {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.created.cmp(&other.created))

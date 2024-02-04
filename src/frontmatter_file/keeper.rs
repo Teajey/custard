@@ -158,7 +158,7 @@ impl notify::EventHandler for ArcMutex {
                 if !path_has_extensions(&path, &["md"]) {
                     return;
                 }
-                let mut map = match self.0.as_ref().lock() {
+                let mut map = match self.lock() {
                     Ok(map) => map,
                     Err(err) => {
                         eprintln!("Failed to lock data map during notify event: {err}");
@@ -267,7 +267,7 @@ mod test {
             .unwrap();
 
         {
-            let keeper = keeper.0.as_ref().lock().unwrap();
+            let keeper = keeper.lock().unwrap();
             let file = keeper.files().find(|file| file.name() == test_file_name);
             assert!(file.is_none());
         }
@@ -302,7 +302,7 @@ mod test {
         pretty_assertions::assert_eq!(FsEvent::Edit, event);
 
         {
-            let keeper = keeper.0.as_ref().lock().unwrap();
+            let keeper = keeper.lock().unwrap();
             let file = keeper
                 .files()
                 .find(|file| file.name() == test_file_name)
@@ -331,7 +331,7 @@ mod test {
         pretty_assertions::assert_eq!(FsEvent::Edit, event);
 
         {
-            let keeper = keeper.0.as_ref().lock().unwrap();
+            let keeper = keeper.lock().unwrap();
             let file = keeper
                 .files()
                 .find(|file| file.name() == test_file_name)
@@ -359,7 +359,7 @@ mod test {
         pretty_assertions::assert_eq!(FsEvent::Delete, event);
 
         {
-            let keeper = keeper.0.as_ref().lock().unwrap();
+            let keeper = keeper.lock().unwrap();
             let file = keeper.files().find(|file| file.name() == test_file_name);
             assert!(file.is_none());
         }

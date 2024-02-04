@@ -2,6 +2,7 @@ mod frontmatter_file;
 mod frontmatter_query;
 mod fs;
 mod markup;
+mod route;
 
 use anyhow::{anyhow, Result};
 use axum::{
@@ -10,30 +11,29 @@ use axum::{
     routing, Json, Router,
 };
 use camino::Utf8PathBuf;
-use frontmatter_query::FrontmatterQuery;
+use chrono::{DateTime, TimeZone};
 use notify::{RecursiveMode, Watcher};
+use serde_yaml::Mapping;
 
-async fn frontmatter_list_get(
-    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
-) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
-    let keeper = markdown_files.0.as_ref().lock().map_err(|err| {
-        eprintln!("Failed to lock data on a get_many request: {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let mut files = keeper
-        .files()
-        .map(|file| file.clone().into())
-        .collect::<Vec<_>>();
-    files.sort();
-    files.reverse();
-    Ok(Json(files))
+fn get_sort_value<Tz: TimeZone>(
+    mapping: Option<&Mapping>,
+    sort_key: &str,
+    created: &DateTime<Tz>,
+) -> String {
+    mapping
+        .and_then(|m| m.get(sort_key))
+        .map(serde_yaml::to_string)
+        .transpose()
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| serde_yaml::to_string(created).expect("DateTime<Utc> must serialize"))
 }
 
 async fn frontmatter_collate_strings_get(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
     Path(key): Path<String>,
 ) -> Result<Json<Vec<String>>, StatusCode> {
-    let keeper = markdown_files.0.as_ref().lock().map_err(|err| {
+    let keeper = markdown_files.lock().map_err(|err| {
         eprintln!("Failed to lock data on a get_collate_strings request: {err}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -80,11 +80,13 @@ async fn run() -> Result<()> {
     watcher.watch(current_dir.as_std_path(), RecursiveMode::NonRecursive)?;
 
     let app = Router::new()
-        .route("/frontmatter/query", routing::post(frontmatter_query::post))
-        .route("/frontmatter/list", routing::get(frontmatter_list_get))
+        .route(
+            "/frontmatter/list",
+            routing::post(route::frontmatter_list::post).get(route::frontmatter_list::get),
+        )
         .route(
             "/frontmatter/file/:name",
-            routing::get(frontmatter_query::file_get).post(frontmatter_query::file_post),
+            routing::get(route::frontmatter_file::get).post(route::frontmatter_file::post),
         )
         .route(
             "/frontmatter/collate_strings/:key",
