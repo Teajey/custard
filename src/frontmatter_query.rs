@@ -1,7 +1,29 @@
+mod file_get;
+mod file_post;
+mod post;
+
 use std::collections::HashMap;
 
 use serde::Deserialize;
 use serde_json::Number;
+
+use crate::frontmatter_file::Short;
+
+pub use file_get::run as file_get;
+pub use file_post::run as file_post;
+pub use post::run as post;
+
+fn get_sort_value(short: &Short, sort_key: &str) -> String {
+    short
+        .get_frontmatter_value(sort_key)
+        .map(serde_yaml::to_string)
+        .transpose()
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| {
+            serde_yaml::to_string(&short.created).expect("DateTime<Utc> must serialize")
+        })
+}
 
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]

@@ -1,6 +1,6 @@
 use std::{
     collections::{hash_map::Values, HashMap},
-    sync::{Arc, Mutex},
+    sync::{Arc, LockResult, Mutex, MutexGuard},
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -132,6 +132,10 @@ pub struct ArcMutex(pub Arc<Mutex<Keeper>>);
 impl ArcMutex {
     pub fn new(keeper: Keeper) -> Self {
         Self(Arc::new(Mutex::new(keeper)))
+    }
+
+    pub fn lock(&self) -> LockResult<MutexGuard<'_, Keeper>> {
+        self.0.as_ref().lock()
     }
 }
 

@@ -7,7 +7,7 @@ use serde::Serialize;
 
 pub use keeper::Keeper;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct FrontmatterFile {
     name: String,
     frontmatter: Option<serde_yaml::Mapping>,
@@ -16,12 +16,24 @@ pub struct FrontmatterFile {
     created: DateTime<Utc>,
 }
 
+impl PartialOrd for FrontmatterFile {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.created.cmp(&other.created))
+    }
+}
+
+impl Ord for FrontmatterFile {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.created.cmp(&other.created)
+    }
+}
+
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct Short {
-    name: String,
-    frontmatter: Option<serde_yaml::Mapping>,
+    pub name: String,
+    pub frontmatter: Option<serde_yaml::Mapping>,
     one_liner: Option<String>,
-    modified: DateTime<Utc>,
+    pub modified: DateTime<Utc>,
     pub created: DateTime<Utc>,
 }
 

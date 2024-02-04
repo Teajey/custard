@@ -1,72 +1,17 @@
 mod frontmatter_file;
 mod frontmatter_query;
 mod fs;
-
-use std::collections::HashMap;
+mod markup;
 
 use anyhow::{anyhow, Result};
 use axum::{
-    extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    extract::{Path, State},
+    http::StatusCode,
     routing, Json, Router,
 };
 use camino::Utf8PathBuf;
 use frontmatter_query::FrontmatterQuery;
 use notify::{RecursiveMode, Watcher};
-
-async fn frontmatter_query_post(
-    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
-    params: Query<HashMap<String, String>>,
-    Json(query): Json<FrontmatterQuery>,
-) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
-    let keeper = markdown_files.0.as_ref().lock().map_err(|err| {
-        eprintln!("Failed to lock data on a get_many request: {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let mut files = keeper
-        .files()
-        .filter(|file| {
-            let Some(frontmatter) = file.frontmatter() else {
-                return query.is_empty();
-            };
-            query.is_subset(
-                &serde_json::from_value(
-                    serde_json::to_value(frontmatter).expect("valid yaml must map to valid json"),
-                )
-                .expect("Map<String, Value> is valid json"),
-            )
-        })
-        .map(|file| file.clone().into())
-        .collect::<Vec<_>>();
-    let sort_key = params.get("sort");
-    if let Some(sort_key) = sort_key {
-        files.sort_by(|f: &frontmatter_file::Short, g| {
-            let f_value = f
-                .get_frontmatter_value(sort_key)
-                .map(serde_yaml::to_string)
-                .transpose()
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    serde_yaml::to_string(&f.created).expect("DateTime<Utc> must serialize")
-                });
-            let g_value = g
-                .get_frontmatter_value(sort_key)
-                .map(serde_yaml::to_string)
-                .transpose()
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    serde_yaml::to_string(&g.created).expect("DateTime<Utc> must serialize")
-                });
-            f_value.cmp(&g_value)
-        });
-    } else {
-        files.sort();
-    }
-    files.reverse();
-    Ok(Json(files))
-}
 
 async fn frontmatter_list_get(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
@@ -82,50 +27,6 @@ async fn frontmatter_list_get(
     files.sort();
     files.reverse();
     Ok(Json(files))
-}
-
-async fn frontmatter_file_get(
-    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
-    Path(name): Path<String>,
-) -> Result<(HeaderMap, String), StatusCode> {
-    let keeper = markdown_files.0.as_ref().lock().map_err(|err| {
-        eprintln!("Failed to lock data on a get_file request: {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let file = keeper
-        .files()
-        .find(|file| file.name() == name)
-        .ok_or(StatusCode::NOT_FOUND)?;
-
-    let mut headers = HeaderMap::new();
-    let frontmatter = file.frontmatter();
-    let frontmatter_string = serde_json::to_string(&frontmatter).map_err(|err| {
-        eprintln!(
-            "Failed to serialize frontmatter ({frontmatter:?}) as JSON during get request: {err}"
-        );
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let frontmatter_header_value = frontmatter_string.parse().map_err(|err| {
-        eprintln!("Failed to parse header value ({frontmatter_string:?}): {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    headers.insert("x-frontmatter", frontmatter_header_value);
-
-    let created_string = file.created().to_rfc3339();
-    let created_header_value = created_string.parse().map_err(|err| {
-        eprintln!("Failed to parse 'created' header value ({created_string:?}): {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    headers.insert("x-created", created_header_value);
-
-    let modified_string = file.modified().to_rfc3339();
-    let modified_header_value = modified_string.parse().map_err(|err| {
-        eprintln!("Failed to parse 'modified' header value ({modified_string:?}): {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    headers.insert("x-modified", modified_header_value);
-
-    Ok((headers, file.body().to_owned()))
 }
 
 async fn frontmatter_collate_strings_get(
@@ -179,11 +80,11 @@ async fn run() -> Result<()> {
     watcher.watch(current_dir.as_std_path(), RecursiveMode::NonRecursive)?;
 
     let app = Router::new()
-        .route("/frontmatter/query", routing::post(frontmatter_query_post))
+        .route("/frontmatter/query", routing::post(frontmatter_query::post))
         .route("/frontmatter/list", routing::get(frontmatter_list_get))
         .route(
             "/frontmatter/file/:name",
-            routing::get(frontmatter_file_get),
+            routing::get(frontmatter_query::file_get).post(frontmatter_query::file_post),
         )
         .route(
             "/frontmatter/collate_strings/:key",
