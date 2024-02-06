@@ -40,7 +40,7 @@ impl From<notify::EventKind> for FsEvent {
 }
 
 pub struct Keeper {
-    inner: HashMap<Utf8PathBuf, FrontmatterFile>,
+    pub inner: HashMap<Utf8PathBuf, FrontmatterFile>,
 }
 
 #[derive(Debug, thiserror::Error)]

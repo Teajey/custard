@@ -44,7 +44,7 @@ impl QueryValue {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct FrontmatterQuery(HashMap<String, QueryValue>);
+pub struct FrontmatterQuery(pub HashMap<String, QueryValue>);
 
 impl FrontmatterQuery {
     pub fn is_subset(&self, json_frontmatter: &serde_json::Map<String, serde_json::Value>) -> bool {

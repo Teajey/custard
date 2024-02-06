@@ -2,123 +2,92 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use axum::{
-    extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    extract::{Query, State},
+    http::StatusCode,
     Json,
 };
 
-use crate::get_sort_value;
-use crate::{frontmatter_file, markup};
-use crate::{frontmatter_file::FrontmatterFile, frontmatter_query::FrontmatterQuery};
+use crate::{
+    frontmatter_file::{self, Short},
+    frontmatter_query::FrontmatterQuery,
+};
 
-fn assign_headers(file: &FrontmatterFile) -> Result<HeaderMap, StatusCode> {
-    let mut headers = HeaderMap::new();
-    let frontmatter = file.frontmatter();
-    let frontmatter_string = serde_json::to_string(&frontmatter).map_err(|err| {
-        eprintln!(
-            "Failed to serialize frontmatter ({frontmatter:?}) as JSON during get request: {err}"
-        );
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let frontmatter_header_value = frontmatter_string.parse().map_err(|err| {
-        eprintln!("Failed to parse header value ({frontmatter_string:?}): {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    headers.insert("x-frontmatter", frontmatter_header_value);
+use super::{lock_keeper, query_files};
 
-    let created_string = file.created().to_rfc3339();
-    let created_header_value = created_string.parse().map_err(|err| {
-        eprintln!("Failed to parse 'created' header value ({created_string:?}): {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    headers.insert("x-created", created_header_value);
-
-    let modified_string = file.modified().to_rfc3339();
-    let modified_header_value = modified_string.parse().map_err(|err| {
-        eprintln!("Failed to parse 'modified' header value ({modified_string:?}): {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    headers.insert("x-modified", modified_header_value);
-
-    Ok(headers)
+fn get_sort_value(file: &Short, sort_key: &str) -> String {
+    file.frontmatter
+        .as_ref()
+        .and_then(|m| m.get(sort_key))
+        .map(serde_yaml::to_string)
+        .transpose()
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| {
+            serde_yaml::to_string(&file.created).expect("DateTime<Utc> must serialize")
+        })
 }
 
-pub async fn post(
-    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
-    params: Query<HashMap<String, String>>,
-    Path(name): Path<String>,
-    Json(query): Json<FrontmatterQuery>,
-) -> Result<(HeaderMap, String), StatusCode> {
-    let keeper = markdown_files.lock().map_err(|err| {
-        eprintln!("Failed to lock data on a get_file request: {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let mut files = keeper.files().collect::<Vec<_>>();
-
+fn sort_with_params(params: &HashMap<String, String>, files: &mut [Short]) {
     let sort_key = params.get("sort");
 
     if let Some(sort_key) = sort_key {
         files.sort_by(|f, g| {
-            let f_value = get_sort_value(f.frontmatter(), sort_key, f.created());
-            let g_value = get_sort_value(g.frontmatter(), sort_key, g.created());
+            let f_value = get_sort_value(f, sort_key);
+            let g_value = get_sort_value(g, sort_key);
             f_value.cmp(&g_value)
         });
     } else {
         files.sort();
     }
     files.reverse();
+}
 
-    let (i, file) = files
-        .iter()
-        .enumerate()
-        .filter(|(_, file)| {
-            let Some(frontmatter) = file.frontmatter() else {
-                // if query is '{}', include this
-                return query.is_empty();
-            };
-            query.is_subset(&markup::yaml_to_json(frontmatter))
-        })
-        .find(|(_, file)| file.name() == name)
-        .ok_or(StatusCode::NOT_FOUND)?;
-    let prev_file_name = files.get(i - 1).map(|f| f.name());
-    let next_file_name = files.get(i + 1).map(|f| f.name());
+fn get_inner(
+    params: &HashMap<String, String>,
+    files: &frontmatter_file::keeper::ArcMutex,
+) -> Result<Vec<Short>, StatusCode> {
+    let keeper = lock_keeper(files)?;
 
-    let mut headers = assign_headers(file)?;
+    let mut files = keeper.files().cloned().map(Short::from).collect::<Vec<_>>();
 
-    if let Some(prev_file_name) = prev_file_name {
-        let prev_file_name_header_value = prev_file_name.parse().map_err(|err| {
-            eprintln!("Failed to parse 'prev-file-name' header value ({prev_file_name:?}): {err}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-        headers.insert("x-prev-file", prev_file_name_header_value);
-    }
+    sort_with_params(params, &mut files);
 
-    if let Some(next_file_name) = next_file_name {
-        let next_file_name_header_value = next_file_name.parse().map_err(|err| {
-            eprintln!("Failed to parse 'next-file-name' header value ({next_file_name:?}): {err}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-        headers.insert("x-next-file", next_file_name_header_value);
-    }
-
-    Ok((headers, file.body().to_owned()))
+    Ok(files)
 }
 
 pub async fn get(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
-    Path(name): Path<String>,
-) -> Result<(HeaderMap, String), StatusCode> {
-    let keeper = markdown_files.lock().map_err(|err| {
-        eprintln!("Failed to lock data on a get_file request: {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let file = keeper
-        .files()
-        .find(|file| file.name() == name)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    params: Query<HashMap<String, String>>,
+) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
+    let files = get_inner(&params, &markdown_files)?;
 
-    let headers = assign_headers(file)?;
+    Ok(Json(files))
+}
 
-    Ok((headers, file.body().to_owned()))
+fn post_inner(
+    params: &HashMap<String, String>,
+    files: &frontmatter_file::keeper::ArcMutex,
+    query: &FrontmatterQuery,
+) -> Result<Vec<Short>, StatusCode> {
+    let keeper = lock_keeper(files)?;
+
+    let files = keeper.files();
+
+    let mut filtered_files = query_files(files, query)
+        .map(|file| file.clone().into())
+        .collect::<Vec<_>>();
+
+    sort_with_params(params, &mut filtered_files);
+
+    Ok(filtered_files)
+}
+
+pub async fn post(
+    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
+    params: Query<HashMap<String, String>>,
+    Json(query): Json<FrontmatterQuery>,
+) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
+    let files = post_inner(&params, &markdown_files, &query)?;
+
+    Ok(Json(files))
 }

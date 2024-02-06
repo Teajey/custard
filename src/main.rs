@@ -11,23 +11,7 @@ use axum::{
     routing, Json, Router,
 };
 use camino::Utf8PathBuf;
-use chrono::{DateTime, TimeZone};
 use notify::{RecursiveMode, Watcher};
-use serde_yaml::Mapping;
-
-fn get_sort_value<Tz: TimeZone>(
-    mapping: Option<&Mapping>,
-    sort_key: &str,
-    created: &DateTime<Tz>,
-) -> String {
-    mapping
-        .and_then(|m| m.get(sort_key))
-        .map(serde_yaml::to_string)
-        .transpose()
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| serde_yaml::to_string(created).expect("DateTime<Utc> must serialize"))
-}
 
 async fn frontmatter_collate_strings_get(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
@@ -86,7 +70,7 @@ async fn run() -> Result<()> {
         )
         .route(
             "/frontmatter/file/:name",
-            routing::get(route::frontmatter_file::get).post(route::frontmatter_file::post),
+            routing::post(route::frontmatter_file::post).get(route::frontmatter_file::get),
         )
         .route(
             "/frontmatter/collate_strings/:key",

@@ -9,11 +9,11 @@ pub use keeper::Keeper;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct FrontmatterFile {
-    name: String,
-    frontmatter: Option<serde_yaml::Mapping>,
-    body: String,
-    modified: DateTime<Utc>,
-    created: DateTime<Utc>,
+    pub name: String,
+    pub frontmatter: Option<serde_yaml::Mapping>,
+    pub body: String,
+    pub modified: DateTime<Utc>,
+    pub created: DateTime<Utc>,
 }
 
 impl PartialOrd for FrontmatterFile {
