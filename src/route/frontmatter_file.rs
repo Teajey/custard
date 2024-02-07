@@ -124,11 +124,12 @@ fn post_inner(
 ) -> Result<(HeaderMap, String), StatusCode> {
     let keeper = lock_keeper(files)?;
 
-    let mut files = keeper.files().collect::<Vec<_>>();
+    let files = keeper.files().collect::<Vec<_>>();
 
-    sort_with_params(params, &mut files);
+    let mut filtered_files =
+        query_files(files.clone().into_iter(), query, Some(name)).collect::<Vec<_>>();
 
-    let filtered_files = query_files(files.clone().into_iter(), query).collect::<Vec<_>>();
+    sort_with_params(params, &mut filtered_files);
 
     let (i, file) = find_file_and_index(&filtered_files, name)?;
 
@@ -354,5 +355,19 @@ mod test {
             .unwrap();
         assert_eq!(None, prev_file_name);
         assert_eq!(Some("about.md"), next_file_name);
+
+        let (headers, _) = post_inner(&keeper, &params, "something.md", &query).unwrap();
+        let next_file_name = headers
+            .get("x-next-file")
+            .map(|h| h.to_str())
+            .transpose()
+            .unwrap();
+        let prev_file_name = headers
+            .get("x-prev-file")
+            .map(|h| h.to_str())
+            .transpose()
+            .unwrap();
+        assert_eq!(Some("about.md"), prev_file_name);
+        assert_eq!(None, next_file_name);
     }
 }

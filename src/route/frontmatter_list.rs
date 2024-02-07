@@ -73,7 +73,7 @@ fn post_inner(
 
     let files = keeper.files();
 
-    let mut filtered_files = query_files(files, query)
+    let mut filtered_files = query_files(files, query, None)
         .map(|file| file.clone().into())
         .collect::<Vec<_>>();
 

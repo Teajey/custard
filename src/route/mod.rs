@@ -14,8 +14,14 @@ use crate::{
 fn query_files<'a>(
     files: impl Iterator<Item = &'a FrontmatterFile>,
     query: &'a FrontmatterQuery,
+    name: Option<&'a str>,
 ) -> impl Iterator<Item = &'a FrontmatterFile> {
-    files.filter(|file| {
+    files.filter(move |file| {
+        if let Some(name) = name {
+            if file.name == name {
+                return true;
+            }
+        }
         let Some(frontmatter) = file.frontmatter() else {
             // if query is '{}', include this
             return query.is_empty();
