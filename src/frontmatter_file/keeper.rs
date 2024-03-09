@@ -209,10 +209,7 @@ mod test {
         }
 
         fn write<T: std::fmt::Display>(&self, str: T) -> std::io::Result<()> {
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .append(true)
-                .open(&self.path)?;
+            let mut file = std::fs::OpenOptions::new().append(true).open(&self.path)?;
 
             write!(file, "{str}")?;
 
