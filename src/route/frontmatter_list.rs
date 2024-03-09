@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -42,6 +41,26 @@ fn sort_with_params(params: &HashMap<String, String>, files: &mut [Short]) {
     files.reverse();
 }
 
+fn paginate(params: &HashMap<String, String>, files: Vec<Short>) -> Result<Vec<Short>, StatusCode> {
+    let offset = params
+        .get("offset")
+        .map(|x| x.parse::<usize>())
+        .transpose()
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    let limit = params
+        .get("limit")
+        .map(|x| x.parse::<usize>())
+        .transpose()
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    let files = match (offset, limit) {
+        (None, None) => files,
+        (None, Some(limit)) => files.into_iter().take(limit).collect(),
+        (Some(offset), None) => files.into_iter().skip(offset).collect(),
+        (Some(offset), Some(limit)) => files.into_iter().skip(offset).take(limit).collect(),
+    };
+    Ok(files)
+}
+
 fn get_inner(
     params: &HashMap<String, String>,
     files: &frontmatter_file::keeper::ArcMutex,
@@ -51,6 +70,8 @@ fn get_inner(
     let mut files = keeper.files().cloned().map(Short::from).collect::<Vec<_>>();
 
     sort_with_params(params, &mut files);
+
+    let files = paginate(params, files)?;
 
     Ok(files)
 }
@@ -78,6 +99,8 @@ fn post_inner(
         .collect::<Vec<_>>();
 
     sort_with_params(params, &mut filtered_files);
+
+    let filtered_files = paginate(params, filtered_files)?;
 
     Ok(filtered_files)
 }
