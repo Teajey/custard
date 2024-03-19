@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     Json,
 };
 
@@ -12,6 +12,14 @@ use crate::{
 };
 
 use super::{lock_keeper, query_files};
+
+fn assign_headers(file_count: usize) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+
+    headers.insert("x-length", file_count.into());
+
+    headers
+}
 
 fn get_sort_value(file: &Short, sort_key: &str) -> String {
     file.frontmatter
@@ -64,32 +72,34 @@ fn paginate(params: &HashMap<String, String>, files: Vec<Short>) -> Result<Vec<S
 fn get_inner(
     params: &HashMap<String, String>,
     files: &frontmatter_file::keeper::ArcMutex,
-) -> Result<Vec<Short>, StatusCode> {
+) -> Result<(HeaderMap, Vec<frontmatter_file::Short>), StatusCode> {
     let keeper = lock_keeper(files)?;
 
     let mut files = keeper.files().cloned().map(Short::from).collect::<Vec<_>>();
 
     sort_with_params(params, &mut files);
 
+    let headers = assign_headers(files.len());
+
     let files = paginate(params, files)?;
 
-    Ok(files)
+    Ok((headers, files))
 }
 
 pub async fn get(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
     params: Query<HashMap<String, String>>,
-) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
-    let files = get_inner(&params, &markdown_files)?;
+) -> Result<(HeaderMap, Json<Vec<frontmatter_file::Short>>), StatusCode> {
+    let (headers, files) = get_inner(&params, &markdown_files)?;
 
-    Ok(Json(files))
+    Ok((headers, Json(files)))
 }
 
 fn post_inner(
     params: &HashMap<String, String>,
     files: &frontmatter_file::keeper::ArcMutex,
     query: &FrontmatterQuery,
-) -> Result<Vec<Short>, StatusCode> {
+) -> Result<(HeaderMap, Vec<frontmatter_file::Short>), StatusCode> {
     let keeper = lock_keeper(files)?;
 
     let files = keeper.files();
@@ -100,17 +110,19 @@ fn post_inner(
 
     sort_with_params(params, &mut filtered_files);
 
+    let headers = assign_headers(filtered_files.len());
+
     let filtered_files = paginate(params, filtered_files)?;
 
-    Ok(filtered_files)
+    Ok((headers, filtered_files))
 }
 
 pub async fn post(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
     params: Query<HashMap<String, String>>,
     Json(query): Json<FrontmatterQuery>,
-) -> Result<Json<Vec<frontmatter_file::Short>>, StatusCode> {
-    let files = post_inner(&params, &markdown_files, &query)?;
+) -> Result<(HeaderMap, Json<Vec<frontmatter_file::Short>>), StatusCode> {
+    let (headers, files) = post_inner(&params, &markdown_files, &query)?;
 
-    Ok(Json(files))
+    Ok((headers, Json(files)))
 }
