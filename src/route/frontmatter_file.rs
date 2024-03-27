@@ -26,6 +26,7 @@ fn get_sort_value(file: &FrontmatterFile, sort_key: &str) -> String {
 
 fn sort_with_params(params: &HashMap<String, String>, files: &mut [&FrontmatterFile]) {
     let sort_key = params.get("sort");
+    let order_key = params.get("order").map_or("desc", String::as_str);
 
     if let Some(sort_key) = sort_key {
         files.sort_by(|f, g| {
@@ -36,7 +37,10 @@ fn sort_with_params(params: &HashMap<String, String>, files: &mut [&FrontmatterF
     } else {
         files.sort();
     }
-    files.reverse();
+
+    if order_key == "desc" {
+        files.reverse();
+    }
 }
 
 fn assign_headers(
