@@ -117,7 +117,7 @@ fn get_prev_and_next_file_names<'a>(
         None
     };
     let next_file_name = files.get(i + 1).map(|f| f.name());
-    (prev_file_name, next_file_name)
+    (next_file_name, prev_file_name)
 }
 
 fn post_inner(
