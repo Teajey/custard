@@ -296,8 +296,8 @@ mod test {
             .map(|h| h.to_str())
             .transpose()
             .unwrap();
-        assert_eq!(Some("about.md"), prev_file_name);
-        assert_eq!(None, next_file_name);
+        assert_eq!(None, prev_file_name);
+        assert_eq!(Some("about.md"), next_file_name);
 
         let (headers, _) = get_inner(&keeper, &params, "about.md").unwrap();
         let next_file_name = headers
@@ -310,8 +310,8 @@ mod test {
             .map(|h| h.to_str())
             .transpose()
             .unwrap();
-        assert_eq!(Some("blah.md"), prev_file_name);
-        assert_eq!(Some("something.md"), next_file_name);
+        assert_eq!(Some("something.md"), prev_file_name);
+        assert_eq!(Some("blah.md"), next_file_name);
 
         let (headers, _) = get_inner(&keeper, &params, "blah.md").unwrap();
         let next_file_name = headers
@@ -324,8 +324,8 @@ mod test {
             .map(|h| h.to_str())
             .transpose()
             .unwrap();
-        assert_eq!(None, prev_file_name);
-        assert_eq!(Some("about.md"), next_file_name);
+        assert_eq!(None, next_file_name);
+        assert_eq!(Some("about.md"), prev_file_name);
     }
 
     #[test]
@@ -350,8 +350,8 @@ mod test {
             .map(|h| h.to_str())
             .transpose()
             .unwrap();
-        assert_eq!(Some("blah.md"), prev_file_name);
-        assert_eq!(None, next_file_name);
+        assert_eq!(None, prev_file_name);
+        assert_eq!(Some("blah.md"), next_file_name);
 
         let (headers, _) = post_inner(&keeper, &params, "blah.md", &query).unwrap();
         let next_file_name = headers
@@ -364,8 +364,8 @@ mod test {
             .map(|h| h.to_str())
             .transpose()
             .unwrap();
-        assert_eq!(None, prev_file_name);
-        assert_eq!(Some("about.md"), next_file_name);
+        assert_eq!(Some("about.md"), prev_file_name);
+        assert_eq!(None, next_file_name);
 
         let (headers, _) = post_inner(&keeper, &params, "something.md", &query).unwrap();
         let next_file_name = headers
@@ -378,7 +378,7 @@ mod test {
             .map(|h| h.to_str())
             .transpose()
             .unwrap();
-        assert_eq!(Some("about.md"), prev_file_name);
-        assert_eq!(None, next_file_name);
+        assert_eq!(None, prev_file_name);
+        assert_eq!(Some("about.md"), next_file_name);
     }
 }
