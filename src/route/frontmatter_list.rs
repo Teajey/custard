@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use axum::{
     extract::{Query, State},
@@ -108,7 +109,14 @@ fn post_inner(
 
     let files = keeper.files();
 
-    let mut filtered_files = query_files(files, query, None)
+    let intersect = params
+        .get("intersect")
+        .map(|p| bool::from_str(p))
+        .transpose()
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .unwrap_or_default();
+
+    let mut filtered_files = query_files(files, query, None, intersect)
         .map(|file| file.clone().into())
         .collect::<Vec<_>>();
 

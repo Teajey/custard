@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use anyhow::Result;
 use axum::{
@@ -130,8 +130,15 @@ fn post_inner(
 
     let files = keeper.files().collect::<Vec<_>>();
 
+    let intersect = params
+        .get("intersect")
+        .map(|p| bool::from_str(p))
+        .transpose()
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .unwrap_or_default();
+
     let mut filtered_files =
-        query_files(files.clone().into_iter(), query, Some(name)).collect::<Vec<_>>();
+        query_files(files.clone().into_iter(), query, Some(name), intersect).collect::<Vec<_>>();
 
     sort_with_params(params, &mut filtered_files);
 

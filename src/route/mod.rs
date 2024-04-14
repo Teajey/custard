@@ -15,6 +15,7 @@ fn query_files<'a>(
     files: impl Iterator<Item = &'a FrontmatterFile>,
     query: &'a FrontmatterQuery,
     name: Option<&'a str>,
+    intersect: bool,
 ) -> impl Iterator<Item = &'a FrontmatterFile> {
     files.filter(move |file| {
         if let Some(name) = name {
@@ -26,7 +27,11 @@ fn query_files<'a>(
             // if query is '{}', include this
             return query.is_empty();
         };
-        query.is_subset(&markup::yaml_to_json(frontmatter))
+        if intersect {
+            query.is_intersect(&markup::yaml_to_json(frontmatter))
+        } else {
+            query.is_subset(&markup::yaml_to_json(frontmatter))
+        }
     })
 }
 
