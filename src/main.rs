@@ -5,43 +5,9 @@ mod markup;
 mod route;
 
 use anyhow::{anyhow, Result};
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    routing, Json, Router,
-};
+use axum::{routing, Router};
 use camino::Utf8PathBuf;
 use notify::{RecursiveMode, Watcher};
-
-async fn frontmatter_collate_strings_get(
-    State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
-    Path(key): Path<String>,
-) -> Result<Json<Vec<String>>, StatusCode> {
-    let keeper = markdown_files.lock().map_err(|err| {
-        eprintln!("Failed to lock data on a get_collate_strings request: {err}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let mut values = keeper
-        .files()
-        .filter_map(|fmf| fmf.frontmatter())
-        .filter_map(|fm| fm.get(&key))
-        .filter_map(|v| match v {
-            serde_yaml::Value::String(v) => Some(vec![v.clone()]),
-            serde_yaml::Value::Sequence(seq) => seq
-                .iter()
-                .map(|v| match v {
-                    serde_yaml::Value::String(v) => Some(v.clone()),
-                    _ => None,
-                })
-                .collect(),
-            _ => None,
-        })
-        .flatten()
-        .collect::<Vec<_>>();
-    values.sort();
-    values.dedup();
-    Ok(Json(values))
-}
 
 async fn run() -> Result<()> {
     let mut args = std::env::args();
@@ -74,7 +40,7 @@ async fn run() -> Result<()> {
         )
         .route(
             "/frontmatter/collate_strings/:key",
-            routing::get(frontmatter_collate_strings_get),
+            routing::post(route::collate_strings::post).get(route::collate_strings::get),
         )
         .with_state(markdown_files);
 
