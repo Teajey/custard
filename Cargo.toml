@@ -8,6 +8,9 @@ repository = "https://github.com/Teajey/custard"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "custard_lib"
+
 [dependencies]
 anyhow = "1.0.75"
 axum = "0.6.20"
