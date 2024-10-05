@@ -48,6 +48,9 @@ impl QueryValue {
     pub fn is_intersect(&self, fm_value: &serde_json::Value) -> bool {
         match (self, fm_value) {
             (QueryValue::Vec(vec), serde_json::Value::Array(fm_vec)) => {
+                if vec.is_empty() {
+                    return true;
+                }
                 vec.iter().any(|s| fm_vec.iter().any(|fm| s.matches(fm)))
             }
             (QueryValue::Scalar(scalar), fm_scalar) => scalar.matches(fm_scalar),
@@ -167,6 +170,9 @@ mod test {
 
             let a = QueryValue::Vec(vec![s!("gotta"), s!("bucks")]);
             assert!(!a.is_subset(&b), "not all match elements match");
+
+            let a = QueryValue::Vec(vec![]);
+            assert!(a.is_subset(&b), "empty set is subset of all other sets");
         }
 
         #[test]
@@ -180,6 +186,12 @@ mod test {
 
             let a = QueryValue::Vec(vec![s!("gotta"), s!("bucks")]);
             assert!(a.is_intersect(&b), "match despite strange element");
+
+            let a = QueryValue::Vec(vec![]);
+            assert!(
+                a.is_intersect(&b),
+                "empty set intersects with all other sets"
+            );
         }
     }
 }
