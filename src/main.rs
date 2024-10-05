@@ -1,7 +1,3 @@
-mod frontmatter_file;
-mod frontmatter_query;
-mod fs;
-mod markup;
 mod route;
 
 use anyhow::{anyhow, Result};
@@ -21,9 +17,9 @@ async fn run() -> Result<()> {
     let current_dir = std::env::current_dir()?;
     let current_dir = Utf8PathBuf::try_from(current_dir)?;
 
-    let keeper = frontmatter_file::Keeper::new(&current_dir)?;
+    let keeper = custard_lib::frontmatter_file::Keeper::new(&current_dir)?;
 
-    let markdown_files = frontmatter_file::keeper::ArcMutex::new(keeper);
+    let markdown_files = custard_lib::frontmatter_file::keeper::ArcMutex::new(keeper);
 
     let mut watcher = notify::recommended_watcher(markdown_files.clone())?;
 

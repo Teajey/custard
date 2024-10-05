@@ -1,15 +1,17 @@
 #![allow(clippy::missing_errors_doc)]
 
-mod frontmatter_file;
-mod frontmatter_query;
+pub mod collate;
+pub mod frontmatter_file;
+pub mod frontmatter_query;
 mod fs;
 pub mod list;
 mod markup;
 pub mod single;
 
+use serde_yaml::Mapping;
+
 use frontmatter_file::FrontmatterFile;
 use frontmatter_query::FrontmatterQuery;
-use serde_yaml::Mapping;
 
 fn get_sort_value(
     frontmatter: Option<&Mapping>,

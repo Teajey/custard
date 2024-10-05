@@ -7,46 +7,17 @@ use axum::{
     Json,
 };
 
-use super::{lock_keeper, query_files};
+use super::lock_keeper;
 
-use crate::{
-    frontmatter_file::{self, FrontmatterFile},
-    frontmatter_query::FrontmatterQuery,
-};
-
-fn collate_strings_from_files<'a>(
-    files: impl Iterator<Item = &'a FrontmatterFile>,
-    key: &str,
-) -> Vec<String> {
-    files
-        .filter_map(|fmf| fmf.frontmatter())
-        .filter_map(|fm| fm.get(key))
-        .filter_map(|v| match v {
-            serde_yaml::Value::String(v) => Some(vec![v.clone()]),
-            serde_yaml::Value::Sequence(seq) => seq
-                .iter()
-                .map(|v| match v {
-                    serde_yaml::Value::String(v) => Some(v.clone()),
-                    _ => None,
-                })
-                .collect(),
-            _ => None,
-        })
-        .flatten()
-        .collect()
-}
+use custard_lib::{frontmatter_file, frontmatter_query::FrontmatterQuery};
 
 pub async fn get(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
     Path(key): Path<String>,
 ) -> Result<Json<Vec<String>>, StatusCode> {
-    let keeper = lock_keeper(&markdown_files)?;
-    let files = keeper.files();
+    let keeper = &*lock_keeper(&markdown_files)?;
 
-    let mut values = collate_strings_from_files(files, &key);
-
-    values.sort();
-    values.dedup();
+    let values = custard_lib::collate::get(keeper, &key);
 
     Ok(Json(values))
 }
@@ -57,8 +28,7 @@ pub async fn post(
     Path(key): Path<String>,
     Json(query): Json<FrontmatterQuery>,
 ) -> Result<Json<Vec<String>>, StatusCode> {
-    let keeper = lock_keeper(&markdown_files)?;
-    let files = keeper.files();
+    let keeper = &*lock_keeper(&markdown_files)?;
 
     let intersect = params
         .get("intersect")
@@ -67,12 +37,7 @@ pub async fn post(
         .map_err(|_| StatusCode::BAD_REQUEST)?
         .unwrap_or_default();
 
-    let files = query_files(files, &query, None, intersect);
-
-    let mut values = collate_strings_from_files(files, &key);
-
-    values.sort();
-    values.dedup();
+    let values = custard_lib::collate::query(keeper, &key, &query, intersect);
 
     Ok(Json(values))
 }
