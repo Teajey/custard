@@ -59,7 +59,7 @@ impl From<FrontmatterFile> for Short {
             created,
         }: FrontmatterFile,
     ) -> Self {
-        let lines = body.trim().split('\n').collect::<Vec<_>>();
+        let lines = body.lines().collect::<Vec<_>>();
         let one_liner = if lines.len() == 1 {
             Some(lines[0].to_owned())
         } else {
