@@ -95,3 +95,138 @@ pub fn query<'a, 'b: 'a>(
         next_file_name,
     })
 }
+
+#[cfg(test)]
+mod test {
+    use std::{collections::HashMap, path::PathBuf};
+
+    use camino::Utf8PathBuf;
+    use chrono::TimeZone;
+    use pretty_assertions::assert_eq;
+    use serde_yaml::Mapping;
+
+    use crate::{
+        frontmatter_file::{FrontmatterFile, Keeper},
+        frontmatter_query::{FrontmatterQuery, QueryValue, Scalar},
+    };
+
+    macro_rules! s {
+        ($v:literal) => {
+            $v.to_string()
+        };
+    }
+
+    macro_rules! path {
+        ($v:literal) => {
+            Utf8PathBuf::from_path_buf(PathBuf::from($v)).unwrap()
+        };
+    }
+
+    macro_rules! dt {
+        ($y:literal) => {
+            chrono::Utc.with_ymd_and_hms($y, 0, 0, 0, 0, 0).unwrap()
+        };
+        ($y:literal, $m:literal) => {
+            chrono::Utc.with_ymd_and_hms($y, $m, $d, 0, 0, 0).unwrap()
+        };
+        ($y:literal, $m:literal, $d:literal) => {
+            chrono::Utc.with_ymd_and_hms($y, $m, $d, 0, 0, 0).unwrap()
+        };
+        ($y:literal, $m:literal, $d:literal, $h:literal) => {
+            chrono::Utc.with_ymd_and_hms($y, $m, $d, $h, 0, 0).unwrap()
+        };
+        ($y:literal, $m:literal, $d:literal, $h:literal, $mm:literal) => {
+            chrono::Utc
+                .with_ymd_and_hms($y, $m, $d, $h, $mm, 0)
+                .unwrap()
+        };
+    }
+
+    fn make_test_keeper() -> Keeper {
+        let mut hm = HashMap::new();
+        let mut fm = Mapping::new();
+        fm.insert(
+            serde_yaml::Value::String(s!("tag")),
+            serde_yaml::Value::String(s!("blue")),
+        );
+        hm.insert(
+            path!("/something.md"),
+            FrontmatterFile {
+                name: s!("something.md"),
+                frontmatter: None,
+                body: s!(""),
+                modified: dt!(2024, 1, 1, 6),
+                created: dt!(2024, 1, 1, 5),
+            },
+        );
+        hm.insert(
+            path!("/about.md"),
+            FrontmatterFile {
+                name: s!("about.md"),
+                frontmatter: Some(fm.clone()),
+                body: s!(""),
+                modified: dt!(2024, 1, 1, 11),
+                created: dt!(2024, 1, 1, 9),
+            },
+        );
+        hm.insert(
+            path!("/blah.md"),
+            FrontmatterFile {
+                name: s!("blah.md"),
+                frontmatter: Some(fm),
+                body: s!(""),
+                modified: dt!(2024, 1, 1, 16),
+                created: dt!(2024, 1, 1, 15),
+            },
+        );
+        Keeper { inner: hm }
+    }
+
+    #[test]
+    fn get() {
+        let keeper = make_test_keeper();
+
+        let response = super::get(&keeper, "something.md", Some("created"), true).unwrap();
+        assert_eq!(None, response.prev_file_name);
+        assert_eq!(Some("about.md"), response.next_file_name);
+
+        let response = super::get(&keeper, "about.md", Some("created"), true).unwrap();
+        assert_eq!(Some("something.md"), response.prev_file_name);
+        assert_eq!(Some("blah.md"), response.next_file_name);
+
+        let response = super::get(&keeper, "blah.md", Some("created"), true).unwrap();
+        assert_eq!(None, response.next_file_name);
+        assert_eq!(Some("about.md"), response.prev_file_name);
+    }
+
+    #[test]
+    fn query() {
+        let keeper = make_test_keeper();
+
+        let mut query_inner = HashMap::new();
+        query_inner.insert(s!("tag"), QueryValue::Scalar(Scalar::String(s!("blue"))));
+        let query = FrontmatterQuery(query_inner);
+
+        let response =
+            super::query(&keeper, "about.md", &query, Some("created"), true, false).unwrap();
+        assert_eq!(None, response.prev_file_name);
+        assert_eq!(Some("blah.md"), response.next_file_name);
+
+        let response =
+            super::query(&keeper, "blah.md", &query, Some("created"), true, false).unwrap();
+        assert_eq!(Some("about.md"), response.prev_file_name);
+        assert_eq!(None, response.next_file_name);
+
+        let response = super::query(
+            &keeper,
+            "something.md",
+            &query,
+            Some("created"),
+            true,
+            false,
+        )
+        .unwrap();
+        assert_eq!(None, response.prev_file_name);
+        assert_eq!(Some("about.md"), response.next_file_name);
+    }
+}
