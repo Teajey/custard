@@ -1,2 +1,2 @@
 /target
-tests/markdown_files
+crates/json_http/tests/markdown_files/
