@@ -13,6 +13,7 @@ pub enum Scalar {
 }
 
 impl Scalar {
+    #[must_use]
     pub fn matches(&self, fm_scalar: &serde_json::Value) -> bool {
         match (self, fm_scalar) {
             (Scalar::String(a), serde_json::Value::String(b)) => a == b,
@@ -32,6 +33,7 @@ pub enum QueryValue {
 }
 
 impl QueryValue {
+    #[must_use]
     pub fn is_subset(&self, fm_value: &serde_json::Value) -> bool {
         match (self, fm_value) {
             (QueryValue::Vec(vec), serde_json::Value::Array(fm_vec)) => {
@@ -42,6 +44,7 @@ impl QueryValue {
         }
     }
 
+    #[must_use]
     pub fn is_intersect(&self, fm_value: &serde_json::Value) -> bool {
         match (self, fm_value) {
             (QueryValue::Vec(vec), serde_json::Value::Array(fm_vec)) => {
@@ -57,6 +60,7 @@ impl QueryValue {
 pub struct FrontmatterQuery(pub HashMap<String, QueryValue>);
 
 impl FrontmatterQuery {
+    #[must_use]
     pub fn is_subset(&self, json_frontmatter: &serde_json::Map<String, serde_json::Value>) -> bool {
         for (key, value) in &self.0 {
             let Some(fm_value) = json_frontmatter.get(key) else {
@@ -71,6 +75,7 @@ impl FrontmatterQuery {
         true
     }
 
+    #[must_use]
     pub fn is_intersect(
         &self,
         json_frontmatter: &serde_json::Map<String, serde_json::Value>,
@@ -88,6 +93,7 @@ impl FrontmatterQuery {
         true
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }

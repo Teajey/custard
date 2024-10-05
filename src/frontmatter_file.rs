@@ -86,22 +86,27 @@ pub enum ReadFromPathError {
 }
 
 impl FrontmatterFile {
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    #[must_use]
     pub fn frontmatter(&self) -> Option<&serde_yaml::Mapping> {
         self.frontmatter.as_ref()
     }
 
+    #[must_use]
     pub fn body(&self) -> &str {
         &self.body
     }
 
+    #[must_use]
     pub fn created(&self) -> &DateTime<Utc> {
         &self.created
     }
 
+    #[must_use]
     pub fn modified(&self) -> &DateTime<Utc> {
         &self.modified
     }

@@ -66,6 +66,7 @@ impl Keeper {
         })
     }
 
+    #[must_use]
     pub fn files(&self) -> Values<'_, Utf8PathBuf, FrontmatterFile> {
         self.inner.values()
     }
@@ -130,6 +131,7 @@ impl Keeper {
 pub struct ArcMutex(pub Arc<Mutex<Keeper>>);
 
 impl ArcMutex {
+    #[must_use]
     pub fn new(keeper: Keeper) -> Self {
         Self(Arc::new(Mutex::new(keeper)))
     }
