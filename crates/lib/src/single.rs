@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::frontmatter_file::{FrontmatterFile, Keeper};
 use crate::frontmatter_query::FrontmatterQuery;
 use crate::{get_sort_value, query_files};
@@ -42,6 +44,7 @@ fn get_prev_and_next_file_names<'a>(
     (next_file_name, prev_file_name)
 }
 
+#[derive(Serialize)]
 pub struct Response<'a> {
     pub file: &'a FrontmatterFile,
     pub prev_file_name: Option<&'a str>,
