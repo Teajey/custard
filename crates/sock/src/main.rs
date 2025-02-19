@@ -7,6 +7,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::UnixListener,
 };
+use tracing::{debug, error, info};
 
 #[derive(Deserialize)]
 #[serde(tag = "tag", content = "value")]
@@ -46,18 +47,18 @@ async fn run() -> Result<()> {
 
     let listener = UnixListener::bind(socket_path)?;
 
-    eprintln!("listening for streams...");
+    info!("listening for streams...");
     while let Ok((mut stream, _addr)) = listener.accept().await {
-        eprintln!("accepted stream");
+        debug!("accepted stream");
         let mf = markdown_files.clone();
         tokio::spawn(async move {
             let mut buf = vec![0; 1024];
 
             loop {
-                eprintln!("reading stream");
+                debug!("reading stream");
                 match stream.read(&mut buf).await {
                     Ok(0) => {
-                        eprintln!("stream terminated");
+                        debug!("stream terminated");
                         break;
                     }
                     Ok(n) => match rmp_serde::from_slice(&buf[..n]) {
@@ -66,7 +67,7 @@ async fn run() -> Result<()> {
                             sort_key,
                             order_desc,
                         }) => {
-                            eprintln!("Received request: {name:?} {sort_key:?} {order_desc:?}");
+                            debug!("Received request: {name:?} {sort_key:?} {order_desc:?}");
                             let resp_buf = {
                                 let keeper = mf.lock().unwrap();
                                 let response = custard_lib::single::get(
@@ -75,19 +76,19 @@ async fn run() -> Result<()> {
                                     sort_key.as_deref(),
                                     order_desc,
                                 );
-                                eprintln!("Sending response: {response:?}");
+                                debug!("Sending response: {response:?}");
                                 rmp_serde::to_vec(&response).unwrap()
                             };
                             stream.write_all(&resp_buf).await.unwrap();
                         }
                         Err(err) => {
-                            eprintln!("stream decode failed: {err}");
+                            error!("stream decode failed: {err}");
                             let nun = rmp_serde::to_vec(&Option::<Response>::None).unwrap();
                             stream.write_all(&nun).await.unwrap();
                         }
                     },
                     Err(err) => {
-                        eprintln!("stream read failed: {err}");
+                        error!("stream read failed: {err}");
                     }
                 }
             }
