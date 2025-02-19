@@ -45,6 +45,7 @@ fn get_prev_and_next_file_names<'a>(
 }
 
 #[derive(Serialize)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Response<'a> {
     pub file: &'a FrontmatterFile,
     pub prev_file_name: Option<&'a str>,

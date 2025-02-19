@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
+use custard_lib::single::Response;
 use notify::{RecursiveMode, Watcher};
 use serde::Deserialize;
 use tokio::{
@@ -8,10 +9,13 @@ use tokio::{
 };
 
 #[derive(Deserialize)]
+#[serde(tag = "tag", content = "value")]
 enum Request {
     Get {
         name: String,
+        #[serde(default)]
         sort_key: Option<String>,
+        #[serde(default)]
         order_desc: bool,
     },
 }
@@ -47,7 +51,7 @@ async fn run() -> Result<()> {
         eprintln!("accepted stream");
         let mf = markdown_files.clone();
         tokio::spawn(async move {
-            let mut buf: Vec<u8> = Vec::new();
+            let mut buf = vec![0; 1024];
 
             loop {
                 eprintln!("reading stream");
@@ -56,24 +60,32 @@ async fn run() -> Result<()> {
                         eprintln!("stream terminated");
                         break;
                     }
-                    Ok(_) => {
-                        let Request::Get {
+                    Ok(n) => match rmp_serde::from_slice(&buf[..n]) {
+                        Ok(Request::Get {
                             name,
                             sort_key,
                             order_desc,
-                        } = rmp_serde::from_slice(&buf).unwrap();
-                        let resp_buf = {
-                            let keeper = mf.lock().unwrap();
-                            let response = custard_lib::single::get(
-                                &keeper,
-                                &name,
-                                sort_key.as_deref(),
-                                order_desc,
-                            );
-                            rmp_serde::to_vec(&response).unwrap()
-                        };
-                        stream.write_all(&resp_buf).await.unwrap();
-                    }
+                        }) => {
+                            eprintln!("Received request: {name:?} {sort_key:?} {order_desc:?}");
+                            let resp_buf = {
+                                let keeper = mf.lock().unwrap();
+                                let response = custard_lib::single::get(
+                                    &keeper,
+                                    &name,
+                                    sort_key.as_deref(),
+                                    order_desc,
+                                );
+                                eprintln!("Sending response: {response:?}");
+                                rmp_serde::to_vec(&response).unwrap()
+                            };
+                            stream.write_all(&resp_buf).await.unwrap();
+                        }
+                        Err(err) => {
+                            eprintln!("stream decode failed: {err}");
+                            let nun = rmp_serde::to_vec(&Option::<Response>::None).unwrap();
+                            stream.write_all(&nun).await.unwrap();
+                        }
+                    },
                     Err(err) => {
                         eprintln!("stream read failed: {err}");
                     }
