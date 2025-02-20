@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
-use custard_lib::single::Response;
+use custard_lib::{frontmatter_file::Keeper, single::Response};
 use notify::{RecursiveMode, Watcher};
 use serde::Deserialize;
 use tokio::{
@@ -12,13 +12,147 @@ use tracing::{debug, error, info};
 #[derive(Deserialize)]
 #[serde(tag = "tag", content = "value")]
 enum Request {
-    Get {
+    SingleGet {
         name: String,
         #[serde(default)]
         sort_key: Option<String>,
         #[serde(default)]
         order_desc: bool,
     },
+    SingleQuery {
+        name: String,
+        query: custard_lib::frontmatter_query::FrontmatterQuery,
+        #[serde(default)]
+        sort_key: Option<String>,
+        #[serde(default)]
+        order_desc: bool,
+        #[serde(default)]
+        intersect: bool,
+    },
+    ListGet {
+        #[serde(default)]
+        sort_key: Option<String>,
+        #[serde(default)]
+        order_desc: bool,
+        #[serde(default)]
+        offset: Option<usize>,
+        #[serde(default)]
+        limit: Option<usize>,
+    },
+    ListQuery {
+        query: custard_lib::frontmatter_query::FrontmatterQuery,
+        #[serde(default)]
+        sort_key: Option<String>,
+        #[serde(default)]
+        order_desc: bool,
+        #[serde(default)]
+        offset: Option<usize>,
+        #[serde(default)]
+        limit: Option<usize>,
+        #[serde(default)]
+        intersect: bool,
+    },
+    CollateGet {
+        key: String,
+    },
+    CollateQuery {
+        key: String,
+        query: custard_lib::frontmatter_query::FrontmatterQuery,
+        #[serde(default)]
+        intersect: bool,
+    },
+}
+
+impl Request {
+    fn process(self, keeper: &Keeper) -> Result<Vec<u8>> {
+        match self {
+            Request::SingleGet {
+                name,
+                sort_key,
+                order_desc,
+            } => {
+                debug!("Received request: {name:?} {sort_key:?} {order_desc:?}");
+                let response =
+                    custard_lib::single::get(keeper, &name, sort_key.as_deref(), order_desc);
+                debug!("Sending response: {response:?}");
+                let vec = rmp_serde::to_vec(&response)?;
+                Ok(vec)
+            }
+            Request::SingleQuery {
+                name,
+                query,
+                sort_key,
+                order_desc,
+                intersect,
+            } => {
+                debug!("Received request: {name:?} {query:?} {sort_key:?} {order_desc:?} {intersect:?}");
+                let response = custard_lib::single::query(
+                    keeper,
+                    &name,
+                    &query,
+                    sort_key.as_deref(),
+                    order_desc,
+                    intersect,
+                );
+                debug!("Sending response: {response:?}");
+                let vec = rmp_serde::to_vec(&response)?;
+                Ok(vec)
+            }
+            Request::ListGet {
+                sort_key,
+                order_desc,
+                offset,
+                limit,
+            } => {
+                debug!("Received request: {sort_key:?} {order_desc:?} {offset:?} {limit:?}");
+                let response =
+                    custard_lib::list::get(keeper, sort_key.as_deref(), order_desc, offset, limit);
+                debug!("Sending response: {response:?}");
+                let vec = rmp_serde::to_vec(&response)?;
+                Ok(vec)
+            }
+            Request::ListQuery {
+                query,
+                sort_key,
+                order_desc,
+                offset,
+                limit,
+                intersect,
+            } => {
+                debug!("Received request: {query:?} {sort_key:?} {order_desc:?} {offset:?} {limit:?} {intersect:?}");
+                let response = custard_lib::list::query(
+                    keeper,
+                    &query,
+                    sort_key.as_deref(),
+                    order_desc,
+                    offset,
+                    limit,
+                    intersect,
+                );
+                debug!("Sending response: {response:?}");
+                let vec = rmp_serde::to_vec(&response)?;
+                Ok(vec)
+            }
+            Request::CollateGet { key } => {
+                debug!("Received request: {key:?}");
+                let response = custard_lib::collate::get(keeper, &key);
+                debug!("Sending response: {response:?}");
+                let vec = rmp_serde::to_vec(&response)?;
+                Ok(vec)
+            }
+            Request::CollateQuery {
+                key,
+                query,
+                intersect,
+            } => {
+                debug!("Received request: {key:?} {query:?} {intersect:?}");
+                let response = custard_lib::collate::query(keeper, &key, &query, intersect);
+                debug!("Sending response: {response:?}");
+                let vec = rmp_serde::to_vec(&response)?;
+                Ok(vec)
+            }
+        }
+    }
 }
 
 async fn run() -> Result<()> {
@@ -61,23 +195,11 @@ async fn run() -> Result<()> {
                         debug!("stream terminated");
                         break;
                     }
-                    Ok(n) => match rmp_serde::from_slice(&buf[..n]) {
-                        Ok(Request::Get {
-                            name,
-                            sort_key,
-                            order_desc,
-                        }) => {
-                            debug!("Received request: {name:?} {sort_key:?} {order_desc:?}");
+                    Ok(n) => match rmp_serde::from_slice::<Request>(&buf[..n]) {
+                        Ok(req) => {
                             let resp_buf = {
                                 let keeper = mf.lock().unwrap();
-                                let response = custard_lib::single::get(
-                                    &keeper,
-                                    &name,
-                                    sort_key.as_deref(),
-                                    order_desc,
-                                );
-                                debug!("Sending response: {response:?}");
-                                rmp_serde::to_vec(&response).unwrap()
+                                req.process(&keeper).unwrap()
                             };
                             stream.write_all(&resp_buf).await.unwrap();
                         }
