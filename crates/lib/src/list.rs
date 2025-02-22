@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 use crate::frontmatter_file::{self, Keeper, Short};
 use crate::frontmatter_query::FrontmatterQuery;
 use crate::{get_sort_value, query_files};
@@ -27,37 +29,91 @@ fn paginate(files: Vec<Short>, offset: Option<usize>, limit: Option<usize>) -> V
     }
 }
 
-pub fn get(
-    keeper: &Keeper,
-    sort_key: Option<&str>,
-    order_desc: bool,
-    offset: Option<usize>,
-    limit: Option<usize>,
-) -> Vec<frontmatter_file::Short> {
+#[derive(Deserialize)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub struct Get<'a> {
+    #[serde(default)]
+    pub sort_key: Option<&'a str>,
+    #[serde(default)]
+    pub order_desc: bool,
+    #[serde(default)]
+    pub offset: Option<usize>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+impl<'a> Get<'a> {
+    #[must_use]
+    pub fn new(
+        sort_key: Option<&'a str>,
+        order_desc: bool,
+        offset: Option<usize>,
+        limit: Option<usize>,
+    ) -> Self {
+        Self {
+            sort_key,
+            order_desc,
+            offset,
+            limit,
+        }
+    }
+}
+
+#[allow(clippy::needless_pass_by_value)]
+pub fn get(keeper: &Keeper, args: Get<'_>) -> Vec<frontmatter_file::Short> {
     let mut files = keeper.files().cloned().map(Short::from).collect::<Vec<_>>();
 
-    sort_with_params(sort_key, order_desc, &mut files);
+    sort_with_params(args.sort_key, args.order_desc, &mut files);
 
-    paginate(files, offset, limit)
+    paginate(files, args.offset, args.limit)
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub struct Query<'a> {
+    pub query: FrontmatterQuery,
+    #[serde(default)]
+    pub sort_key: Option<&'a str>,
+    #[serde(default)]
+    pub order_desc: bool,
+    #[serde(default)]
+    pub offset: Option<usize>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub intersect: bool,
+}
+
+impl<'a> Query<'a> {
+    #[must_use]
+    pub fn new(
+        query: FrontmatterQuery,
+        sort_key: Option<&'a str>,
+        order_desc: bool,
+        offset: Option<usize>,
+        limit: Option<usize>,
+        intersect: bool,
+    ) -> Self {
+        Self {
+            query,
+            sort_key,
+            order_desc,
+            offset,
+            limit,
+            intersect,
+        }
+    }
 }
 
 #[must_use]
-pub fn query(
-    keeper: &Keeper,
-    query: FrontmatterQuery,
-    sort_key: Option<&str>,
-    order_desc: bool,
-    offset: Option<usize>,
-    limit: Option<usize>,
-    intersect: bool,
-) -> Vec<frontmatter_file::Short> {
+pub fn query(keeper: &Keeper, args: Query<'_>) -> Vec<frontmatter_file::Short> {
     let files = keeper.files();
 
-    let mut filtered_files = query_files(files, query, None, intersect)
+    let mut filtered_files = query_files(files, args.query, None, args.intersect)
         .map(|file| file.clone().into())
         .collect::<Vec<_>>();
 
-    sort_with_params(sort_key, order_desc, &mut filtered_files);
+    sort_with_params(args.sort_key, args.order_desc, &mut filtered_files);
 
-    paginate(filtered_files, offset, limit)
+    paginate(filtered_files, args.offset, args.limit)
 }

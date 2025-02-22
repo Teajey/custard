@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
-use custard_lib::{frontmatter_file::Keeper, single};
+use custard_lib::{frontmatter_file::Keeper, list, single};
 use notify::{RecursiveMode, Watcher};
 use serde::Deserialize;
 use tokio::{
@@ -15,29 +15,8 @@ enum Request<'a> {
     #[serde(borrow)]
     SingleGet(single::Get<'a>),
     SingleQuery(single::Query<'a>),
-    ListGet {
-        #[serde(default)]
-        sort_key: Option<String>,
-        #[serde(default)]
-        order_desc: bool,
-        #[serde(default)]
-        offset: Option<usize>,
-        #[serde(default)]
-        limit: Option<usize>,
-    },
-    ListQuery {
-        query: custard_lib::frontmatter_query::FrontmatterQuery,
-        #[serde(default)]
-        sort_key: Option<String>,
-        #[serde(default)]
-        order_desc: bool,
-        #[serde(default)]
-        offset: Option<usize>,
-        #[serde(default)]
-        limit: Option<usize>,
-        #[serde(default)]
-        intersect: bool,
-    },
+    ListGet(list::Get<'a>),
+    ListQuery(list::Query<'a>),
     CollateGet {
         key: String,
     },
@@ -66,37 +45,16 @@ impl Request<'_> {
                 let vec = rmp_serde::to_vec(&response)?;
                 Ok(vec)
             }
-            Request::ListGet {
-                sort_key,
-                order_desc,
-                offset,
-                limit,
-            } => {
-                debug!("Received request: {sort_key:?} {order_desc:?} {offset:?} {limit:?}");
-                let response =
-                    custard_lib::list::get(keeper, sort_key.as_deref(), order_desc, offset, limit);
+            Request::ListGet(args) => {
+                debug!("Received request: {args:?}");
+                let response = custard_lib::list::get(keeper, args);
                 debug!("Sending response: {response:?}");
                 let vec = rmp_serde::to_vec(&response)?;
                 Ok(vec)
             }
-            Request::ListQuery {
-                query,
-                sort_key,
-                order_desc,
-                offset,
-                limit,
-                intersect,
-            } => {
-                debug!("Received request: {query:?} {sort_key:?} {order_desc:?} {offset:?} {limit:?} {intersect:?}");
-                let response = custard_lib::list::query(
-                    keeper,
-                    query,
-                    sort_key.as_deref(),
-                    order_desc,
-                    offset,
-                    limit,
-                    intersect,
-                );
+            Request::ListQuery(args) => {
+                debug!("Received request: {args:?}");
+                let response = custard_lib::list::query(keeper, args);
                 debug!("Sending response: {response:?}");
                 let vec = rmp_serde::to_vec(&response)?;
                 Ok(vec)

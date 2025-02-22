@@ -36,7 +36,10 @@ fn get_inner(
         .transpose()
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    let files = custard_lib::list::get(keeper, sort_key, order_desc, offset, limit);
+    let files = custard_lib::list::get(
+        keeper,
+        custard_lib::list::Get::new(sort_key, order_desc, offset, limit),
+    );
 
     let headers = assign_headers(files.len());
 
@@ -79,7 +82,8 @@ fn post_inner(
         .unwrap_or_default();
 
     let files = custard_lib::list::query(
-        keeper, query, sort_key, order_desc, offset, limit, intersect,
+        keeper,
+        custard_lib::list::Query::new(query, sort_key, order_desc, offset, limit, intersect),
     );
 
     let headers = assign_headers(files.len());
