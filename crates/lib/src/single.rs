@@ -175,7 +175,7 @@ mod test {
             chrono::Utc.with_ymd_and_hms($y, 0, 0, 0, 0, 0).unwrap()
         };
         ($y:literal, $m:literal) => {
-            chrono::Utc.with_ymd_and_hms($y, $m, $d, 0, 0, 0).unwrap()
+            chrono::Utc.with_ymd_and_hms($y, $m, 0, 0, 0, 0).unwrap()
         };
         ($y:literal, $m:literal, $d:literal) => {
             chrono::Utc.with_ymd_and_hms($y, $m, $d, 0, 0, 0).unwrap()

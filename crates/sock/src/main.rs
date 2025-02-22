@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 use camino::Utf8PathBuf;
 use custard_lib::{
     collate,
@@ -12,6 +12,19 @@ use tokio::{
     net::UnixListener,
 };
 use tracing::{debug, error, info};
+
+#[derive(Serialize, Debug)]
+#[serde(tag = "tag", content = "value")]
+enum Result<'a> {
+    Ok(Response<'a>),
+    InternalServerError,
+}
+
+// TODO: Ideally this would be statically generated
+fn internal_server_error_bytes() -> Vec<u8> {
+    rmp_serde::to_vec(&Result::InternalServerError)
+        .expect("Result::InternalServerError does not serialize")
+}
 
 #[derive(Serialize, Debug)]
 enum Response<'a> {
@@ -63,7 +76,70 @@ impl<'kep, 'req: 'kep> Request<'req> {
     }
 }
 
-async fn run() -> Result<()> {
+fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf: &[u8]) -> Vec<u8> {
+    let req = match rmp_serde::from_slice::<Request>(in_buf) {
+        Ok(req) => req,
+        Err(err) => {
+            error!("stream decode failed: {err}");
+            return internal_server_error_bytes();
+        }
+    };
+    debug!("Received request: {req:?}");
+
+    let keeper = match markdown_files.lock() {
+        Ok(keeper) => keeper,
+        Err(err) => {
+            error!("Failed to lock markdown files: {err}");
+            return internal_server_error_bytes();
+        }
+    };
+    let resp = req.process(&keeper);
+    debug!("Sending response: {resp:?}");
+
+    match rmp_serde::to_vec(&Result::Ok(resp)) {
+        Ok(out_buf) => out_buf,
+        Err(err) => {
+            error!("Failed to serialize response: {err}");
+            internal_server_error_bytes()
+        }
+    }
+}
+
+async fn accept_streams(
+    markdown_files: frontmatter_file::keeper::ArcMutex,
+    listener: UnixListener,
+) {
+    info!("listening for streams...");
+    while let Ok((mut stream, _addr)) = listener.accept().await {
+        debug!("accepted stream");
+        let mf = markdown_files.clone();
+        tokio::spawn(async move {
+            let mut buf = vec![0; 1024];
+
+            loop {
+                debug!("reading stream");
+                match stream.read(&mut buf).await {
+                    Ok(0) => {
+                        debug!("stream terminated");
+                        break;
+                    }
+                    Ok(n) => {
+                        let out_buf = in_buf_2_out_buf(&mf, &buf[..n]);
+                        let Err(err) = stream.write_all(&out_buf).await else {
+                            continue;
+                        };
+                        error!("stream write failed: {err}");
+                    }
+                    Err(err) => {
+                        error!("stream read failed: {err}");
+                    }
+                }
+            }
+        });
+    }
+}
+
+async fn run() -> anyhow::Result<()> {
     let mut args = std::env::args();
     let socket_path = args
         .nth(1)
@@ -89,43 +165,7 @@ async fn run() -> Result<()> {
 
     let listener = UnixListener::bind(socket_path)?;
 
-    info!("listening for streams...");
-    while let Ok((mut stream, _addr)) = listener.accept().await {
-        debug!("accepted stream");
-        let mf = markdown_files.clone();
-        tokio::spawn(async move {
-            let mut buf = vec![0; 1024];
-
-            loop {
-                debug!("reading stream");
-                match stream.read(&mut buf).await {
-                    Ok(0) => {
-                        debug!("stream terminated");
-                        break;
-                    }
-                    Ok(n) => match rmp_serde::from_slice::<Request>(&buf[..n]) {
-                        Ok(req) => {
-                            debug!("Received request: {req:?}");
-                            let resp_buf = {
-                                let keeper = mf.lock().unwrap();
-                                let resp = req.process(&keeper);
-                                debug!("Sending response: {resp:?}");
-                                rmp_serde::to_vec(&resp).unwrap()
-                            };
-                            stream.write_all(&resp_buf).await.unwrap();
-                        }
-                        Err(err) => {
-                            error!("stream decode failed: {err}");
-                            stream.write_all(&[]).await.unwrap();
-                        }
-                    },
-                    Err(err) => {
-                        error!("stream read failed: {err}");
-                    }
-                }
-            }
-        });
-    }
+    accept_streams(markdown_files, listener).await;
 
     Ok(())
 }
