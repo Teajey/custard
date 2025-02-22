@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
-use custard_lib::{frontmatter_file::Keeper, list, single};
+use custard_lib::{collate, frontmatter_file::Keeper, list, single};
 use notify::{RecursiveMode, Watcher};
 use serde::Deserialize;
 use tokio::{
@@ -17,15 +17,8 @@ enum Request<'a> {
     SingleQuery(single::Query<'a>),
     ListGet(list::Get<'a>),
     ListQuery(list::Query<'a>),
-    CollateGet {
-        key: String,
-    },
-    CollateQuery {
-        key: String,
-        query: custard_lib::frontmatter_query::FrontmatterQuery,
-        #[serde(default)]
-        intersect: bool,
-    },
+    CollateGet(collate::Get<'a>),
+    CollateQuery(collate::Query<'a>),
 }
 
 impl Request<'_> {
@@ -59,20 +52,16 @@ impl Request<'_> {
                 let vec = rmp_serde::to_vec(&response)?;
                 Ok(vec)
             }
-            Request::CollateGet { key } => {
-                debug!("Received request: {key:?}");
-                let response = custard_lib::collate::get(keeper, &key);
+            Request::CollateGet(args) => {
+                debug!("Received request: {args:?}");
+                let response = custard_lib::collate::get(keeper, args);
                 debug!("Sending response: {response:?}");
                 let vec = rmp_serde::to_vec(&response)?;
                 Ok(vec)
             }
-            Request::CollateQuery {
-                key,
-                query,
-                intersect,
-            } => {
-                debug!("Received request: {key:?} {query:?} {intersect:?}");
-                let response = custard_lib::collate::query(keeper, &key, query, intersect);
+            Request::CollateQuery(args) => {
+                debug!("Received request: {args:?}");
+                let response = custard_lib::collate::query(keeper, args);
                 debug!("Sending response: {response:?}");
                 let vec = rmp_serde::to_vec(&response)?;
                 Ok(vec)

@@ -17,7 +17,7 @@ pub async fn get(
 ) -> Result<Json<Vec<String>>, StatusCode> {
     let keeper = &*lock_keeper(&markdown_files)?;
 
-    let values = custard_lib::collate::get(keeper, &key);
+    let values = custard_lib::collate::get(keeper, custard_lib::collate::Get::new(&key));
 
     Ok(Json(values))
 }
@@ -37,7 +37,10 @@ pub async fn post(
         .map_err(|_| StatusCode::BAD_REQUEST)?
         .unwrap_or_default();
 
-    let values = custard_lib::collate::query(keeper, &key, query, intersect);
+    let values = custard_lib::collate::query(
+        keeper,
+        custard_lib::collate::Query::new(&key, query, intersect),
+    );
 
     Ok(Json(values))
 }

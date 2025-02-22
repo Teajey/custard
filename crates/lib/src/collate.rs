@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 use super::query_files;
 
 use crate::{
@@ -27,11 +29,25 @@ fn collate_strings_from_files<'a>(
         .collect()
 }
 
+#[derive(Deserialize)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub struct Get<'a> {
+    pub key: &'a str,
+}
+
+impl<'a> Get<'a> {
+    #[must_use]
+    pub fn new(key: &'a str) -> Self {
+        Self { key }
+    }
+}
+
 #[must_use]
-pub fn get(keeper: &Keeper, key: &str) -> Vec<String> {
+#[allow(clippy::needless_pass_by_value)]
+pub fn get(keeper: &Keeper, args: Get<'_>) -> Vec<String> {
     let files = keeper.files();
 
-    let mut values = collate_strings_from_files(files, key);
+    let mut values = collate_strings_from_files(files, args.key);
 
     values.sort();
     values.dedup();
@@ -39,13 +55,33 @@ pub fn get(keeper: &Keeper, key: &str) -> Vec<String> {
     values
 }
 
+#[derive(Deserialize)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub struct Query<'a> {
+    pub key: &'a str,
+    pub query: FrontmatterQuery,
+    #[serde(default)]
+    pub intersect: bool,
+}
+
+impl<'a> Query<'a> {
+    #[must_use]
+    pub fn new(key: &'a str, query: FrontmatterQuery, intersect: bool) -> Self {
+        Self {
+            key,
+            query,
+            intersect,
+        }
+    }
+}
+
 #[must_use]
-pub fn query(keeper: &Keeper, key: &str, query: FrontmatterQuery, intersect: bool) -> Vec<String> {
+pub fn query(keeper: &Keeper, args: Query<'_>) -> Vec<String> {
     let files = keeper.files();
 
-    let files = query_files(files, query, None, intersect);
+    let files = query_files(files, args.query, None, args.intersect);
 
-    let mut values = collate_strings_from_files(files, key);
+    let mut values = collate_strings_from_files(files, args.key);
 
     values.sort();
     values.dedup();
