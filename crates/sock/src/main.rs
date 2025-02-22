@@ -1,15 +1,26 @@
 use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
-use custard_lib::{collate, frontmatter_file::Keeper, list, single};
+use custard_lib::{
+    collate,
+    frontmatter_file::{self, Keeper},
+    list, single,
+};
 use notify::{RecursiveMode, Watcher};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::UnixListener,
 };
 use tracing::{debug, error, info};
 
-#[derive(Deserialize)]
+#[derive(Serialize, Debug)]
+enum Response<'a> {
+    Single(Option<single::Response<'a>>),
+    List(Vec<frontmatter_file::Short>),
+    Collate(Vec<String>),
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(tag = "tag", content = "value")]
 enum Request<'a> {
     #[serde(borrow)]
@@ -21,50 +32,32 @@ enum Request<'a> {
     CollateQuery(collate::Query<'a>),
 }
 
-impl Request<'_> {
-    fn process(self, keeper: &Keeper) -> Result<Vec<u8>> {
+impl<'kep, 'req: 'kep> Request<'req> {
+    fn process(self, keeper: &'kep Keeper) -> Response<'kep> {
         match self {
             Request::SingleGet(args) => {
-                debug!("Received request: {args:?}");
                 let response = custard_lib::single::get(keeper, args);
-                debug!("Sending response: {response:?}");
-                let vec = rmp_serde::to_vec(&response)?;
-                Ok(vec)
+                Response::Single(response)
             }
             Request::SingleQuery(args) => {
-                debug!("Received request: {args:?}");
                 let response = custard_lib::single::query(keeper, args);
-                debug!("Sending response: {response:?}");
-                let vec = rmp_serde::to_vec(&response)?;
-                Ok(vec)
+                Response::Single(response)
             }
             Request::ListGet(args) => {
-                debug!("Received request: {args:?}");
                 let response = custard_lib::list::get(keeper, args);
-                debug!("Sending response: {response:?}");
-                let vec = rmp_serde::to_vec(&response)?;
-                Ok(vec)
+                Response::List(response)
             }
             Request::ListQuery(args) => {
-                debug!("Received request: {args:?}");
                 let response = custard_lib::list::query(keeper, args);
-                debug!("Sending response: {response:?}");
-                let vec = rmp_serde::to_vec(&response)?;
-                Ok(vec)
+                Response::List(response)
             }
             Request::CollateGet(args) => {
-                debug!("Received request: {args:?}");
                 let response = custard_lib::collate::get(keeper, args);
-                debug!("Sending response: {response:?}");
-                let vec = rmp_serde::to_vec(&response)?;
-                Ok(vec)
+                Response::Collate(response)
             }
             Request::CollateQuery(args) => {
-                debug!("Received request: {args:?}");
                 let response = custard_lib::collate::query(keeper, args);
-                debug!("Sending response: {response:?}");
-                let vec = rmp_serde::to_vec(&response)?;
-                Ok(vec)
+                Response::Collate(response)
             }
         }
     }
@@ -112,9 +105,12 @@ async fn run() -> Result<()> {
                     }
                     Ok(n) => match rmp_serde::from_slice::<Request>(&buf[..n]) {
                         Ok(req) => {
+                            debug!("Received request: {req:?}");
                             let resp_buf = {
                                 let keeper = mf.lock().unwrap();
-                                req.process(&keeper).unwrap()
+                                let resp = req.process(&keeper);
+                                debug!("Sending response: {resp:?}");
+                                rmp_serde::to_vec(&resp).unwrap()
                             };
                             stream.write_all(&resp_buf).await.unwrap();
                         }
