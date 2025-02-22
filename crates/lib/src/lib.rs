@@ -29,7 +29,7 @@ fn get_sort_value(
 
 fn query_files<'a>(
     files: impl Iterator<Item = &'a FrontmatterFile>,
-    query: &'a FrontmatterQuery,
+    query: FrontmatterQuery,
     name: Option<&'a str>,
     intersect: bool,
 ) -> impl Iterator<Item = &'a FrontmatterFile> {

@@ -4,6 +4,7 @@ use serde::Deserialize;
 use serde_json::Number;
 
 #[derive(Deserialize, Debug)]
+#[cfg_attr(debug_assertions, derive(Clone))]
 #[serde(untagged)]
 pub enum Scalar {
     String(String),
@@ -26,6 +27,7 @@ impl Scalar {
 }
 
 #[derive(Deserialize, Debug)]
+#[cfg_attr(debug_assertions, derive(Clone))]
 #[serde(untagged)]
 pub enum QueryValue {
     Vec(Vec<Scalar>),
@@ -60,6 +62,7 @@ impl QueryValue {
 }
 
 #[derive(Deserialize, Debug)]
+#[cfg_attr(debug_assertions, derive(Clone))]
 pub struct FrontmatterQuery(pub HashMap<String, QueryValue>);
 
 impl FrontmatterQuery {

@@ -44,7 +44,7 @@ pub fn get(
 #[must_use]
 pub fn query(
     keeper: &Keeper,
-    query: &FrontmatterQuery,
+    query: FrontmatterQuery,
     sort_key: Option<&str>,
     order_desc: bool,
     offset: Option<usize>,

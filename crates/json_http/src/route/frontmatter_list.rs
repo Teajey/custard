@@ -55,7 +55,7 @@ pub async fn get(
 fn post_inner(
     params: &HashMap<String, String>,
     files: &frontmatter_file::keeper::ArcMutex,
-    query: &FrontmatterQuery,
+    query: FrontmatterQuery,
 ) -> Result<(HeaderMap, Vec<frontmatter_file::Short>), StatusCode> {
     let keeper = &*lock_keeper(files)?;
 
@@ -92,7 +92,7 @@ pub async fn post(
     params: Query<HashMap<String, String>>,
     Json(query): Json<FrontmatterQuery>,
 ) -> Result<(HeaderMap, Json<Vec<frontmatter_file::Short>>), StatusCode> {
-    let (headers, files) = post_inner(&params, &markdown_files, &query)?;
+    let (headers, files) = post_inner(&params, &markdown_files, query)?;
 
     Ok((headers, Json(files)))
 }

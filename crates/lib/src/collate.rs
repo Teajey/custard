@@ -40,7 +40,7 @@ pub fn get(keeper: &Keeper, key: &str) -> Vec<String> {
 }
 
 #[must_use]
-pub fn query(keeper: &Keeper, key: &str, query: &FrontmatterQuery, intersect: bool) -> Vec<String> {
+pub fn query(keeper: &Keeper, key: &str, query: FrontmatterQuery, intersect: bool) -> Vec<String> {
     let files = keeper.files();
 
     let files = query_files(files, query, None, intersect);

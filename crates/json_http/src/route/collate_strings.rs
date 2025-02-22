@@ -37,7 +37,7 @@ pub async fn post(
         .map_err(|_| StatusCode::BAD_REQUEST)?
         .unwrap_or_default();
 
-    let values = custard_lib::collate::query(keeper, &key, &query, intersect);
+    let values = custard_lib::collate::query(keeper, &key, query, intersect);
 
     Ok(Json(values))
 }

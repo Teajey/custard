@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
-use custard_lib::{frontmatter_file::Keeper, single::Response};
+use custard_lib::{frontmatter_file::Keeper, single};
 use notify::{RecursiveMode, Watcher};
 use serde::Deserialize;
 use tokio::{
@@ -11,24 +11,10 @@ use tracing::{debug, error, info};
 
 #[derive(Deserialize)]
 #[serde(tag = "tag", content = "value")]
-enum Request {
-    SingleGet {
-        name: String,
-        #[serde(default)]
-        sort_key: Option<String>,
-        #[serde(default)]
-        order_desc: bool,
-    },
-    SingleQuery {
-        name: String,
-        query: custard_lib::frontmatter_query::FrontmatterQuery,
-        #[serde(default)]
-        sort_key: Option<String>,
-        #[serde(default)]
-        order_desc: bool,
-        #[serde(default)]
-        intersect: bool,
-    },
+enum Request<'a> {
+    #[serde(borrow)]
+    SingleGet(single::Get<'a>),
+    SingleQuery(single::Query<'a>),
     ListGet {
         #[serde(default)]
         sort_key: Option<String>,
@@ -63,37 +49,19 @@ enum Request {
     },
 }
 
-impl Request {
+impl Request<'_> {
     fn process(self, keeper: &Keeper) -> Result<Vec<u8>> {
         match self {
-            Request::SingleGet {
-                name,
-                sort_key,
-                order_desc,
-            } => {
-                debug!("Received request: {name:?} {sort_key:?} {order_desc:?}");
-                let response =
-                    custard_lib::single::get(keeper, &name, sort_key.as_deref(), order_desc);
+            Request::SingleGet(args) => {
+                debug!("Received request: {args:?}");
+                let response = custard_lib::single::get(keeper, args);
                 debug!("Sending response: {response:?}");
                 let vec = rmp_serde::to_vec(&response)?;
                 Ok(vec)
             }
-            Request::SingleQuery {
-                name,
-                query,
-                sort_key,
-                order_desc,
-                intersect,
-            } => {
-                debug!("Received request: {name:?} {query:?} {sort_key:?} {order_desc:?} {intersect:?}");
-                let response = custard_lib::single::query(
-                    keeper,
-                    &name,
-                    &query,
-                    sort_key.as_deref(),
-                    order_desc,
-                    intersect,
-                );
+            Request::SingleQuery(args) => {
+                debug!("Received request: {args:?}");
+                let response = custard_lib::single::query(keeper, args);
                 debug!("Sending response: {response:?}");
                 let vec = rmp_serde::to_vec(&response)?;
                 Ok(vec)
@@ -122,7 +90,7 @@ impl Request {
                 debug!("Received request: {query:?} {sort_key:?} {order_desc:?} {offset:?} {limit:?} {intersect:?}");
                 let response = custard_lib::list::query(
                     keeper,
-                    &query,
+                    query,
                     sort_key.as_deref(),
                     order_desc,
                     offset,
@@ -146,7 +114,7 @@ impl Request {
                 intersect,
             } => {
                 debug!("Received request: {key:?} {query:?} {intersect:?}");
-                let response = custard_lib::collate::query(keeper, &key, &query, intersect);
+                let response = custard_lib::collate::query(keeper, &key, query, intersect);
                 debug!("Sending response: {response:?}");
                 let vec = rmp_serde::to_vec(&response)?;
                 Ok(vec)
@@ -205,8 +173,7 @@ async fn run() -> Result<()> {
                         }
                         Err(err) => {
                             error!("stream decode failed: {err}");
-                            let nun = rmp_serde::to_vec(&Option::<Response>::None).unwrap();
-                            stream.write_all(&nun).await.unwrap();
+                            stream.write_all(&[]).await.unwrap();
                         }
                     },
                     Err(err) => {
