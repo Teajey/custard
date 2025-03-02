@@ -179,6 +179,8 @@ async fn run() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
+
     if let Err(err) = run().await {
         eprintln!("Error: {err}");
         std::process::exit(1);
