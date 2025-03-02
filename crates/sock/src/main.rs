@@ -15,18 +15,19 @@ use tracing::{debug, error, info};
 
 #[derive(Serialize, Debug)]
 #[serde(tag = "tag", content = "value")]
-enum Result<'a> {
-    Ok(Response<'a>),
+enum Result<T: Serialize> {
+    Ok(T),
     InternalServerError,
 }
 
 // TODO: Ideally this would be statically generated
 fn internal_server_error_bytes() -> Vec<u8> {
-    rmp_serde::to_vec(&Result::InternalServerError)
+    rmp_serde::to_vec(&Result::<()>::InternalServerError)
         .expect("Result::InternalServerError does not serialize")
 }
 
 #[derive(Serialize, Debug)]
+#[serde(tag = "tag", content = "value")]
 enum Response<'a> {
     Single(Option<single::Response<'a>>),
     List(Vec<frontmatter_file::Short>),
@@ -96,7 +97,13 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
     let resp = req.process(&keeper);
     debug!("Sending response: {resp:?}");
 
-    match rmp_serde::to_vec(&Result::Ok(resp)) {
+    let out_buf = match resp {
+        Response::Single(response) => rmp_serde::to_vec(&Result::Ok(response)),
+        Response::List(vec) => rmp_serde::to_vec(&Result::Ok(vec)),
+        Response::Collate(vec) => rmp_serde::to_vec(&Result::Ok(vec)),
+    };
+
+    match out_buf {
         Ok(out_buf) => out_buf,
         Err(err) => {
             error!("Failed to serialize response: {err}");

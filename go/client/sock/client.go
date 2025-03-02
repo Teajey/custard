@@ -4,12 +4,17 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/vmihailenco/msgpack"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
-type request struct {
+type taggedRequest struct {
 	Tag   string `msgpack:"tag"`
 	Value any    `msgpack:"value"`
+}
+
+type taggedResponse struct {
+	Tag   string             `msgpack:"tag"`
+	Value msgpack.RawMessage `msgpack:"value"`
 }
 
 type GetRequest struct {
@@ -24,15 +29,15 @@ type getResponse struct {
 	NextFileName string `msgpack:"next_file_name"`
 }
 
-func SendGetRequest(socketPath string, getReq GetRequest) (*getResponse, error) {
+func SendSingleGetRequest(socketPath string, getReq GetRequest) (*getResponse, error) {
 	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to dial: %w", err)
 	}
 	defer conn.Close()
 
-	req := request{
-		Tag:   "Get",
+	req := taggedRequest{
+		Tag:   "SingleGet",
 		Value: getReq,
 	}
 
@@ -41,11 +46,23 @@ func SendGetRequest(socketPath string, getReq GetRequest) (*getResponse, error) 
 		return nil, fmt.Errorf("Failed to encode request: %w", err)
 	}
 
-	var resp *getResponse
+	var resp *taggedResponse
 	dec := msgpack.NewDecoder(conn)
 	if err := dec.Decode(&resp); err != nil {
 		return nil, fmt.Errorf("Failed to decode response: %w", err)
 	}
 
-	return resp, nil
+	switch resp.Tag {
+	case "Ok":
+		var getResp getResponse
+		err := msgpack.Unmarshal(resp.Value, &getResp)
+		if err != nil {
+			return nil, fmt.Errorf("Could not unmarshal response value: %w", err)
+		}
+		return &getResp, nil
+	case "InternalServerError":
+		return nil, fmt.Errorf("Custard had internal server error")
+	default:
+		return nil, fmt.Errorf("Unrecognised tag from server: %s", resp.Tag)
+	}
 }

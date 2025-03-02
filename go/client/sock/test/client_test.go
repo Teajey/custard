@@ -6,8 +6,8 @@ import (
 	"github.com/Teajey/custard/go/client/sock"
 )
 
-func TestSendGetRequest(t *testing.T) {
-	resp, err := sock.SendGetRequest("/tmp/custard", sock.GetRequest{
+func TestSendSingleGetRequest(t *testing.T) {
+	resp, err := sock.SendSingleGetRequest("/tmp/custard", sock.GetRequest{
 		Name:      "chai-cheese.md",
 		SortKey:   "",
 		OrderDesc: false,
