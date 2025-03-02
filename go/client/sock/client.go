@@ -37,15 +37,26 @@ type getResponse struct {
 	NextFileName string `msgpack:"next_file_name"`
 }
 
-func SendSingleGetRequest(socketPath string, getReq GetRequest) (*getResponse, error) {
-	conn, err := net.Dial("unix", socketPath)
+type Client struct {
+	socketPath string
+}
+
+func NewClient(socketPath string) *Client {
+	c := Client{
+		socketPath,
+	}
+	return &c
+}
+
+func (c *Client) sendSingleRequest(getReq any, tag string) (*getResponse, error) {
+	conn, err := net.Dial("unix", c.socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to dial: %w", err)
 	}
 	defer conn.Close()
 
 	req := taggedRequest{
-		Tag:   "SingleGet",
+		Tag:   tag,
 		Value: getReq,
 	}
 
@@ -75,40 +86,10 @@ func SendSingleGetRequest(socketPath string, getReq GetRequest) (*getResponse, e
 	}
 }
 
-func SendSingleQueryRequest(socketPath string, queryReq QueryRequest) (*getResponse, error) {
-	conn, err := net.Dial("unix", socketPath)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to dial: %w", err)
-	}
-	defer conn.Close()
+func (c *Client) SendSingleGetRequest(getReq GetRequest) (*getResponse, error) {
+	return c.sendSingleRequest(getReq, "SingleGet")
+}
 
-	req := taggedRequest{
-		Tag:   "SingleQuery",
-		Value: queryReq,
-	}
-
-	enc := msgpack.NewEncoder(conn)
-	if err := enc.Encode(req); err != nil {
-		return nil, fmt.Errorf("Failed to encode request: %w", err)
-	}
-
-	var resp *taggedResponse
-	dec := msgpack.NewDecoder(conn)
-	if err := dec.Decode(&resp); err != nil {
-		return nil, fmt.Errorf("Failed to decode response: %w", err)
-	}
-
-	switch resp.Tag {
-	case "Ok":
-		var getResp getResponse
-		err := msgpack.Unmarshal(resp.Value, &getResp)
-		if err != nil {
-			return nil, fmt.Errorf("Could not unmarshal response value: %w", err)
-		}
-		return &getResp, nil
-	case "InternalServerError":
-		return nil, fmt.Errorf("Custard had internal server error")
-	default:
-		return nil, fmt.Errorf("Unrecognised tag from server: %s", resp.Tag)
-	}
+func (c *Client) SendSingleQueryRequest(queryReq QueryRequest) (*getResponse, error) {
+	return c.sendSingleRequest(queryReq, "SingleQuery")
 }

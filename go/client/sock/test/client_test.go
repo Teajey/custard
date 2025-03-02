@@ -7,7 +7,8 @@ import (
 )
 
 func TestSendSingleGetRequest(t *testing.T) {
-	resp, err := sock.SendSingleGetRequest("/tmp/custard", sock.GetRequest{
+	client := sock.NewClient("/tmp/custard")
+	resp, err := client.SendSingleGetRequest(sock.GetRequest{
 		Name:      "chai-cheese.md",
 		SortKey:   "",
 		OrderDesc: false,
@@ -31,7 +32,8 @@ func TestSendSingleGetRequest(t *testing.T) {
 }
 
 func TestSendSingleQueryRequest(t *testing.T) {
-	resp, err := sock.SendSingleQueryRequest("/tmp/custard", sock.QueryRequest{
+	client := sock.NewClient("/tmp/custard")
+	resp, err := client.SendSingleQueryRequest(sock.QueryRequest{
 		Name: "chai-cheese.md",
 		Query: map[string]any{
 			"tags": []string{"code"},
