@@ -6,9 +6,9 @@ import (
 	"github.com/Teajey/custard/go/client/sock"
 )
 
-func TestSendSingleGetRequest(t *testing.T) {
+func TestGetSingle(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.SendSingleGetRequest(sock.RequestSingleGet{
+	resp, err := client.GetSingle(sock.GetSingleRequest{
 		Name:      "chai-cheese.md",
 		SortKey:   "",
 		OrderDesc: false,
@@ -31,9 +31,9 @@ func TestSendSingleGetRequest(t *testing.T) {
 	}
 }
 
-func TestSendSingleQueryRequest(t *testing.T) {
+func TestQuerySingle(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.SendSingleQueryRequest(sock.RequestSingleQuery{
+	resp, err := client.QuerySingle(sock.QuerySingleRequest{
 		Name: "chai-cheese.md",
 		Query: map[string]any{
 			"tags": []string{"code"},
@@ -60,9 +60,9 @@ func TestSendSingleQueryRequest(t *testing.T) {
 	}
 }
 
-func TestSendListGetRequest(t *testing.T) {
+func TestGetList(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.SendListGetRequest(sock.RequestListGet{
+	resp, err := client.GetList(sock.GetListRequest{
 		Limit: 3,
 	})
 	if err != nil {
