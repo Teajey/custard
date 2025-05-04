@@ -17,13 +17,20 @@ type taggedResponse struct {
 	Value msgpack.RawMessage `msgpack:"value"`
 }
 
-type GetRequest struct {
+type RequestSingleGet struct {
 	Name      string `msgpack:"name"`
 	SortKey   string `msgpack:"sort_key,omitempty"`
 	OrderDesc bool   `msgpack:"order_desc,omitempty"`
 }
 
-type QueryRequest struct {
+type RequestListGet struct {
+	SortKey   string `msgpack:"sort_key,omitempty"`
+	OrderDesc bool   `msgpack:"order_desc,omitempty"`
+	Offset    uint   `msgpack:"offset,omitempty"`
+	Limit     uint   `msgpack:"limit,omitempty"`
+}
+
+type RequestSingleQuery struct {
 	Name      string         `msgpack:"name"`
 	Query     map[string]any `msgpack:"query"`
 	SortKey   string         `msgpack:"sort_key,omitempty"`
@@ -31,10 +38,18 @@ type QueryRequest struct {
 	Intersect bool           `msgpack:"intersect"`
 }
 
-type getResponse struct {
+type singleResponse struct {
 	File         any    `msgpack:"file"`
 	PrevFileName string `msgpack:"prev_file_name"`
 	NextFileName string `msgpack:"next_file_name"`
+}
+
+type listResponse struct {
+	Name        string          `msgpack:"name"`
+	Frontmatter *map[string]any `msgpack:"frontmatter,omitempty"`
+	OneLiner    string          `msgpack:"one_liner,omitempty"`
+	Modified    string          `msgpack:"modified"`
+	Created     string          `msgpack:"created"`
 }
 
 type Client struct {
@@ -48,7 +63,7 @@ func NewClient(socketPath string) *Client {
 	return &c
 }
 
-func (c *Client) sendSingleRequest(getReq any, tag string) (*getResponse, error) {
+func (c *Client) sendListRequest(listReq any, tag string) ([]listResponse, error) {
 	conn, err := net.Dial("unix", c.socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to dial: %w", err)
@@ -57,7 +72,7 @@ func (c *Client) sendSingleRequest(getReq any, tag string) (*getResponse, error)
 
 	req := taggedRequest{
 		Tag:   tag,
-		Value: getReq,
+		Value: listReq,
 	}
 
 	enc := msgpack.NewEncoder(conn)
@@ -73,12 +88,12 @@ func (c *Client) sendSingleRequest(getReq any, tag string) (*getResponse, error)
 
 	switch resp.Tag {
 	case "Ok":
-		var getResp getResponse
-		err := msgpack.Unmarshal(resp.Value, &getResp)
+		var listResp []listResponse
+		err := msgpack.Unmarshal(resp.Value, &listResp)
 		if err != nil {
 			return nil, fmt.Errorf("Could not unmarshal response value: %w", err)
 		}
-		return &getResp, nil
+		return listResp, nil
 	case "InternalServerError":
 		return nil, fmt.Errorf("Custard had internal server error")
 	default:
@@ -86,10 +101,55 @@ func (c *Client) sendSingleRequest(getReq any, tag string) (*getResponse, error)
 	}
 }
 
-func (c *Client) SendSingleGetRequest(getReq GetRequest) (*getResponse, error) {
-	return c.sendSingleRequest(getReq, "SingleGet")
+func (c *Client) sendSingleRequest(singleReq any, tag string) (*singleResponse, error) {
+	conn, err := net.Dial("unix", c.socketPath)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to dial: %w", err)
+	}
+	defer conn.Close()
+
+	req := taggedRequest{
+		Tag:   tag,
+		Value: singleReq,
+	}
+
+	enc := msgpack.NewEncoder(conn)
+	if err := enc.Encode(req); err != nil {
+		return nil, fmt.Errorf("Failed to encode request: %w", err)
+	}
+
+	var resp *taggedResponse
+	dec := msgpack.NewDecoder(conn)
+	if err := dec.Decode(&resp); err != nil {
+		return nil, fmt.Errorf("Failed to decode response: %w", err)
+	}
+
+	switch resp.Tag {
+	case "Ok":
+		if resp.Value == nil {
+			return nil, nil
+		}
+		var singleResp singleResponse
+		err := msgpack.Unmarshal(resp.Value, &singleResp)
+		if err != nil {
+			return nil, fmt.Errorf("Could not unmarshal response value: %w", err)
+		}
+		return &singleResp, nil
+	case "InternalServerError":
+		return nil, fmt.Errorf("Custard had internal server error")
+	default:
+		return nil, fmt.Errorf("Unrecognised tag from server: %s", resp.Tag)
+	}
 }
 
-func (c *Client) SendSingleQueryRequest(queryReq QueryRequest) (*getResponse, error) {
-	return c.sendSingleRequest(queryReq, "SingleQuery")
+func (c *Client) SendSingleGetRequest(req RequestSingleGet) (*singleResponse, error) {
+	return c.sendSingleRequest(req, "SingleGet")
+}
+
+func (c *Client) SendSingleQueryRequest(req RequestSingleQuery) (*singleResponse, error) {
+	return c.sendSingleRequest(req, "SingleQuery")
+}
+
+func (c *Client) SendListGetRequest(req RequestListGet) ([]listResponse, error) {
+	return c.sendListRequest(req, "ListGet")
 }

@@ -8,7 +8,7 @@ import (
 
 func TestSendSingleGetRequest(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.SendSingleGetRequest(sock.GetRequest{
+	resp, err := client.SendSingleGetRequest(sock.RequestSingleGet{
 		Name:      "chai-cheese.md",
 		SortKey:   "",
 		OrderDesc: false,
@@ -33,7 +33,7 @@ func TestSendSingleGetRequest(t *testing.T) {
 
 func TestSendSingleQueryRequest(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.SendSingleQueryRequest(sock.QueryRequest{
+	resp, err := client.SendSingleQueryRequest(sock.RequestSingleQuery{
 		Name: "chai-cheese.md",
 		Query: map[string]any{
 			"tags": []string{"code"},
@@ -57,5 +57,19 @@ func TestSendSingleQueryRequest(t *testing.T) {
 	if resp.NextFileName != expectedNextFileName {
 		t.Fail()
 		t.Logf("Next file name not '%s'. Found: %s", expectedNextFileName, resp.NextFileName)
+	}
+}
+
+func TestSendListGetRequest(t *testing.T) {
+	client := sock.NewClient("/tmp/custard")
+	resp, err := client.SendListGetRequest(sock.RequestListGet{
+		Limit: 3,
+	})
+	if err != nil {
+		t.Fatalf("Request failed: %s", err)
+	}
+	respLen := len(resp)
+	if respLen != 3 {
+		t.Fatalf("Unexpected response length: %d", respLen)
 	}
 }

@@ -78,6 +78,7 @@ impl<'kep, 'req: 'kep> Request<'req> {
 }
 
 fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf: &[u8]) -> Vec<u8> {
+    debug!("Received bytes: {in_buf:x?}");
     let req = match rmp_serde::from_slice::<Request>(in_buf) {
         Ok(req) => req,
         Err(err) => {
@@ -99,12 +100,18 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
 
     let out_buf = match resp {
         Response::Single(response) => rmp_serde::to_vec(&Result::Ok(response)),
-        Response::List(vec) => rmp_serde::to_vec(&Result::Ok(vec)),
+        Response::List(vec) => {
+            debug!("Sending list of length: {}", vec.len());
+            rmp_serde::to_vec(&Result::Ok(vec))
+        }
         Response::Collate(vec) => rmp_serde::to_vec(&Result::Ok(vec)),
     };
 
     match out_buf {
-        Ok(out_buf) => out_buf,
+        Ok(out_buf) => {
+            debug!("Sending bytes: {:x?}", out_buf);
+            out_buf
+        }
         Err(err) => {
             error!("Failed to serialize response: {err}");
             internal_server_error_bytes()
