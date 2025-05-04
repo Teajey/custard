@@ -73,3 +73,17 @@ func TestGetList(t *testing.T) {
 		t.Fatalf("Unexpected response length: %d", respLen)
 	}
 }
+
+func TestQueryList(t *testing.T) {
+	client := sock.NewClient("/tmp/custard")
+	resp, err := client.QueryList(sock.QueryListRequest{
+		Query: map[string]any{"tags": []string{"code"}},
+	})
+	if err != nil {
+		t.Fatalf("Request failed: %s", err)
+	}
+	respLen := len(resp)
+	if respLen != 5 {
+		t.Fatalf("Unexpected response length: %d", respLen)
+	}
+}

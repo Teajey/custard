@@ -23,6 +23,14 @@ type GetSingleRequest struct {
 	OrderDesc bool   `msgpack:"order_desc,omitempty"`
 }
 
+type QuerySingleRequest struct {
+	Name      string         `msgpack:"name"`
+	Query     map[string]any `msgpack:"query"`
+	SortKey   string         `msgpack:"sort_key,omitempty"`
+	OrderDesc bool           `msgpack:"order_desc,omitempty"`
+	Intersect bool           `msgpack:"intersect"`
+}
+
 type GetListRequest struct {
 	SortKey   string `msgpack:"sort_key,omitempty"`
 	OrderDesc bool   `msgpack:"order_desc,omitempty"`
@@ -30,12 +38,13 @@ type GetListRequest struct {
 	Limit     uint   `msgpack:"limit,omitempty"`
 }
 
-type QuerySingleRequest struct {
-	Name      string         `msgpack:"name"`
+type QueryListRequest struct {
 	Query     map[string]any `msgpack:"query"`
 	SortKey   string         `msgpack:"sort_key,omitempty"`
 	OrderDesc bool           `msgpack:"order_desc,omitempty"`
-	Intersect bool           `msgpack:"intersect"`
+	Offset    uint           `msgpack:"offset,omitempty"`
+	Limit     uint           `msgpack:"limit,omitempty"`
+	Intersect bool           `msgpack:"intersect,omitempty"`
 }
 
 type singleResponse struct {
@@ -152,4 +161,8 @@ func (c *Client) QuerySingle(req QuerySingleRequest) (*singleResponse, error) {
 
 func (c *Client) GetList(req GetListRequest) ([]listResponse, error) {
 	return c.runListRequest(req, "ListGet")
+}
+
+func (c *Client) QueryList(req QueryListRequest) ([]listResponse, error) {
+	return c.runListRequest(req, "ListQuery")
 }
