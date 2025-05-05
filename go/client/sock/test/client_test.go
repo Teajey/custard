@@ -1,6 +1,7 @@
 package sock_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/Teajey/custard/go/client/sock"
@@ -85,5 +86,34 @@ func TestQueryList(t *testing.T) {
 	respLen := len(resp)
 	if respLen != 5 {
 		t.Fatalf("Unexpected response length: %d", respLen)
+	}
+}
+
+func TestGetCollate(t *testing.T) {
+	client := sock.NewClient("/tmp/custard")
+	resp, err := client.GetCollate(sock.GetCollateRequest{
+		Key: "tags",
+	})
+	if err != nil {
+		t.Fatalf("Request failed: %s", err)
+	}
+	expected := []string{"code", "music", "ramble", "sketch", "travel"}
+	if !slices.Equal(expected, resp) {
+		t.Fatalf("Expected %v but got %v", expected, resp)
+	}
+}
+
+func TestQueryCollate(t *testing.T) {
+	client := sock.NewClient("/tmp/custard")
+	resp, err := client.QueryCollate(sock.QueryCollateRequest{
+		Key:   "tags",
+		Query: map[string]any{"tags": []string{"code"}},
+	})
+	if err != nil {
+		t.Fatalf("Request failed: %s", err)
+	}
+	expected := []string{"code", "sketch"}
+	if !slices.Equal(expected, resp) {
+		t.Fatalf("Expected %v but got %v", expected, resp)
 	}
 }
