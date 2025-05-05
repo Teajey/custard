@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Cache
-        uses: actions/cache@v3.2.6
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ~/.cargo
@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Cache
-        uses: actions/cache@v3.2.6
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ~/.cargo
@@ -49,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Cache
-        uses: actions/cache@v3.2.6
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ~/.cargo
