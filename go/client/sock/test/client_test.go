@@ -32,6 +32,22 @@ func TestGetSingle(t *testing.T) {
 	}
 }
 
+func TestGetSingleWithNoFrontmatter(t *testing.T) {
+	client := sock.NewClient("/tmp/custard")
+	resp, err := client.GetSingle(sock.GetSingleRequest{
+		Name: "about.md",
+	})
+	if err != nil {
+		t.Fatalf("Request failed: %s", err)
+	}
+	if resp == nil {
+		t.Fatalf("Didn't find file")
+	}
+	if resp.File.Frontmatter != nil {
+		t.Fatalf("Frontmatter was not nil as expected")
+	}
+}
+
 func TestQuerySingle(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
 	resp, err := client.QuerySingle(sock.QuerySingleRequest{

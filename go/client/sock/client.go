@@ -57,18 +57,26 @@ type QueryCollateRequest struct {
 	Intersect bool           `msgpack:"intersect,omitempty"`
 }
 
+type FileResponse struct {
+	Name        string         `msgpack:"name"`
+	Frontmatter map[string]any `msgpack:"frontmatter,omitempty"`
+	Body        string         `msgpack:"body"`
+	Modified    string         `msgpack:"modified"`
+	Created     string         `msgpack:"created"`
+}
+
 type SingleResponse struct {
-	File         any    `msgpack:"file"`
-	PrevFileName string `msgpack:"prev_file_name"`
-	NextFileName string `msgpack:"next_file_name"`
+	File         FileResponse `msgpack:"file"`
+	PrevFileName string       `msgpack:"prev_file_name"`
+	NextFileName string       `msgpack:"next_file_name"`
 }
 
 type ListResponse struct {
-	Name        string          `msgpack:"name"`
-	Frontmatter *map[string]any `msgpack:"frontmatter,omitempty"`
-	OneLiner    string          `msgpack:"one_liner,omitempty"`
-	Modified    string          `msgpack:"modified"`
-	Created     string          `msgpack:"created"`
+	Name        string         `msgpack:"name"`
+	Frontmatter map[string]any `msgpack:"frontmatter,omitempty"`
+	OneLiner    string         `msgpack:"one_liner,omitempty"`
+	Modified    string         `msgpack:"modified"`
+	Created     string         `msgpack:"created"`
 }
 
 type Client struct {
