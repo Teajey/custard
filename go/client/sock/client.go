@@ -57,13 +57,13 @@ type QueryCollateRequest struct {
 	Intersect bool           `msgpack:"intersect,omitempty"`
 }
 
-type singleResponse struct {
+type SingleResponse struct {
 	File         any    `msgpack:"file"`
 	PrevFileName string `msgpack:"prev_file_name"`
 	NextFileName string `msgpack:"next_file_name"`
 }
 
-type listResponse struct {
+type ListResponse struct {
 	Name        string          `msgpack:"name"`
 	Frontmatter *map[string]any `msgpack:"frontmatter,omitempty"`
 	OneLiner    string          `msgpack:"one_liner,omitempty"`
@@ -82,7 +82,7 @@ func NewClient(socketPath string) *Client {
 	return &c
 }
 
-func (c *Client) runListRequest(listReq any, tag string) ([]listResponse, error) {
+func (c *Client) runListRequest(listReq any, tag string) ([]ListResponse, error) {
 	conn, err := net.Dial("unix", c.socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to dial: %w", err)
@@ -107,7 +107,7 @@ func (c *Client) runListRequest(listReq any, tag string) ([]listResponse, error)
 
 	switch resp.Tag {
 	case "Ok":
-		var listResp []listResponse
+		var listResp []ListResponse
 		err := msgpack.Unmarshal(resp.Value, &listResp)
 		if err != nil {
 			return nil, fmt.Errorf("Could not unmarshal response value: %w", err)
@@ -120,7 +120,7 @@ func (c *Client) runListRequest(listReq any, tag string) ([]listResponse, error)
 	}
 }
 
-func (c *Client) runSingleRequest(singleReq any, tag string) (*singleResponse, error) {
+func (c *Client) runSingleRequest(singleReq any, tag string) (*SingleResponse, error) {
 	conn, err := net.Dial("unix", c.socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to dial: %w", err)
@@ -148,7 +148,7 @@ func (c *Client) runSingleRequest(singleReq any, tag string) (*singleResponse, e
 		if resp.Value == nil {
 			return nil, nil
 		}
-		var singleResp singleResponse
+		var singleResp SingleResponse
 		err := msgpack.Unmarshal(resp.Value, &singleResp)
 		if err != nil {
 			return nil, fmt.Errorf("Could not unmarshal response value: %w", err)
@@ -199,19 +199,19 @@ func (c *Client) runCollateRequest(collateReq any, tag string) ([]string, error)
 	}
 }
 
-func (c *Client) GetSingle(req GetSingleRequest) (*singleResponse, error) {
+func (c *Client) GetSingle(req GetSingleRequest) (*SingleResponse, error) {
 	return c.runSingleRequest(req, "SingleGet")
 }
 
-func (c *Client) QuerySingle(req QuerySingleRequest) (*singleResponse, error) {
+func (c *Client) QuerySingle(req QuerySingleRequest) (*SingleResponse, error) {
 	return c.runSingleRequest(req, "SingleQuery")
 }
 
-func (c *Client) GetList(req GetListRequest) ([]listResponse, error) {
+func (c *Client) GetList(req GetListRequest) ([]ListResponse, error) {
 	return c.runListRequest(req, "ListGet")
 }
 
-func (c *Client) QueryList(req QueryListRequest) ([]listResponse, error) {
+func (c *Client) QueryList(req QueryListRequest) ([]ListResponse, error) {
 	return c.runListRequest(req, "ListQuery")
 }
 
