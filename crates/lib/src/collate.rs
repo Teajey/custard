@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use tracing::debug;
 
 use super::query_files;
 
@@ -42,9 +43,8 @@ impl<'a> Get<'a> {
     }
 }
 
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn get(keeper: &Keeper, args: Get<'_>) -> Vec<String> {
+fn inner_get(keeper: &Keeper, args: Get<'_>) -> Vec<String> {
     let files = keeper.files();
 
     let mut values = collate_strings_from_files(files, args.key);
@@ -53,6 +53,15 @@ pub fn get(keeper: &Keeper, args: Get<'_>) -> Vec<String> {
     values.dedup();
 
     values
+}
+
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn get(keeper: &Keeper, args: Get<'_>) -> Vec<String> {
+    debug!("Received get request: {args:?}");
+    let response = inner_get(keeper, args);
+    debug!("Sending get response: {response:?}");
+    response
 }
 
 #[derive(Deserialize)]
@@ -75,8 +84,7 @@ impl<'a> Query<'a> {
     }
 }
 
-#[must_use]
-pub fn query(keeper: &Keeper, args: Query<'_>) -> Vec<String> {
+fn inner_query(keeper: &Keeper, args: Query<'_>) -> Vec<String> {
     let files = keeper.files();
 
     let files = query_files(files, args.query, None, args.intersect);
@@ -87,4 +95,12 @@ pub fn query(keeper: &Keeper, args: Query<'_>) -> Vec<String> {
     values.dedup();
 
     values
+}
+
+#[must_use]
+pub fn query(keeper: &Keeper, args: Query<'_>) -> Vec<String> {
+    debug!("Received query request: {args:?}");
+    let response = inner_query(keeper, args);
+    debug!("Sending query response: {response:?}");
+    response
 }

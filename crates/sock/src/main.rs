@@ -86,7 +86,6 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
             return internal_server_error_bytes();
         }
     };
-    debug!("Received request: {req:?}");
 
     let keeper = match markdown_files.lock() {
         Ok(keeper) => keeper,
@@ -96,12 +95,10 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
         }
     };
     let resp = req.process(&keeper);
-    debug!("Sending response: {resp:?}");
 
     let out_buf = match resp {
         Response::Single(response) => rmp_serde::to_vec(&Result::Ok(response)),
         Response::List(list) => {
-            debug!("Sending list of length: {}", list.files.len());
             rmp_serde::to_vec(&Result::Ok(list))
         }
         Response::Collate(vec) => rmp_serde::to_vec(&Result::Ok(vec)),

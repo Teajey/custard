@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use crate::frontmatter_file::{self, Keeper, Short};
 use crate::frontmatter_query::FrontmatterQuery;
@@ -66,7 +67,7 @@ pub struct Response {
 }
 
 #[allow(clippy::needless_pass_by_value)]
-pub fn get(keeper: &Keeper, args: Get<'_>) -> Response {
+fn inner_get(keeper: &Keeper, args: Get<'_>) -> Response {
     let mut files = keeper.files().cloned().map(Short::from).collect::<Vec<_>>();
 
     let total = files.len();
@@ -76,6 +77,14 @@ pub fn get(keeper: &Keeper, args: Get<'_>) -> Response {
     let files = paginate(files, args.offset, args.limit);
 
     Response { files, total }
+}
+
+#[allow(clippy::needless_pass_by_value)]
+pub fn get(keeper: &Keeper, args: Get<'_>) -> Response {
+    debug!("Received get request: {args:?}");
+    let response = inner_get(keeper, args);
+    debug!("Sending get response: {response:?}");
+    response
 }
 
 #[derive(Deserialize)]
@@ -115,8 +124,7 @@ impl<'a> Query<'a> {
     }
 }
 
-#[must_use]
-pub fn query(keeper: &Keeper, args: Query<'_>) -> Response {
+fn inner_query(keeper: &Keeper, args: Query<'_>) -> Response {
     let files = keeper.files();
 
     let mut filtered_files = query_files(files, args.query, None, args.intersect)
@@ -130,4 +138,12 @@ pub fn query(keeper: &Keeper, args: Query<'_>) -> Response {
     let files = paginate(filtered_files, args.offset, args.limit);
 
     Response { files, total }
+}
+
+#[must_use]
+pub fn query(keeper: &Keeper, args: Query<'_>) -> Response {
+    debug!("Received query request: {args:?}");
+    let response = inner_query(keeper, args);
+    debug!("Sending query response: {response:?}");
+    response
 }

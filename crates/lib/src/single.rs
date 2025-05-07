@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use crate::frontmatter_file::{FrontmatterFile, Keeper};
 use crate::frontmatter_query::FrontmatterQuery;
@@ -73,9 +74,8 @@ impl<'a> Get<'a> {
     }
 }
 
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn get<'a, 'b>(keeper: &'a Keeper, args: Get<'b>) -> Option<Response<'a>> {
+fn inner_get<'a, 'b>(keeper: &'a Keeper, args: Get<'b>) -> Option<Response<'a>> {
     let mut files = keeper.files().collect::<Vec<&'a FrontmatterFile>>();
 
     sort_with_params(args.sort_key, args.order_desc, &mut files);
@@ -89,6 +89,15 @@ pub fn get<'a, 'b>(keeper: &'a Keeper, args: Get<'b>) -> Option<Response<'a>> {
         prev_file_name,
         next_file_name,
     })
+}
+
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn get<'a>(keeper: &'a Keeper, args: Get<'_>) -> Option<Response<'a>> {
+    debug!("Received get request: {args:?}");
+    let response = inner_get(keeper, args);
+    debug!("Sending get response: {response:?}");
+    response
 }
 
 #[derive(Deserialize)]
@@ -123,9 +132,8 @@ impl<'a> Query<'a> {
     }
 }
 
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn query<'a, 'b: 'a>(keeper: &'a Keeper, args: Query<'b>) -> Option<Response<'a>> {
+fn inner_query<'a, 'b: 'a>(keeper: &'a Keeper, args: Query<'b>) -> Option<Response<'a>> {
     let files = keeper.files();
 
     let mut filtered_files =
@@ -142,6 +150,15 @@ pub fn query<'a, 'b: 'a>(keeper: &'a Keeper, args: Query<'b>) -> Option<Response
         prev_file_name,
         next_file_name,
     })
+}
+
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn query<'a, 'b: 'a>(keeper: &'a Keeper, args: Query<'b>) -> Option<Response<'a>> {
+    debug!("Received query request: {args:?}");
+    let response = inner_query(keeper, args);
+    debug!("Sending query response: {response:?}");
+    response
 }
 
 #[cfg(test)]
