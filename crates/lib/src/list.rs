@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::frontmatter_file::{self, Keeper, Short};
 use crate::frontmatter_query::FrontmatterQuery;
@@ -59,13 +59,23 @@ impl<'a> Get<'a> {
     }
 }
 
+#[derive(Serialize, Debug)]
+pub struct Response {
+    pub files: Vec<frontmatter_file::Short>,
+    pub total: usize,
+}
+
 #[allow(clippy::needless_pass_by_value)]
-pub fn get(keeper: &Keeper, args: Get<'_>) -> Vec<frontmatter_file::Short> {
+pub fn get(keeper: &Keeper, args: Get<'_>) -> Response {
     let mut files = keeper.files().cloned().map(Short::from).collect::<Vec<_>>();
+
+    let total = files.len();
 
     sort_with_params(args.sort_key, args.order_desc, &mut files);
 
-    paginate(files, args.offset, args.limit)
+    let files = paginate(files, args.offset, args.limit);
+
+    Response { files, total }
 }
 
 #[derive(Deserialize)]
@@ -106,8 +116,10 @@ impl<'a> Query<'a> {
 }
 
 #[must_use]
-pub fn query(keeper: &Keeper, args: Query<'_>) -> Vec<frontmatter_file::Short> {
+pub fn query(keeper: &Keeper, args: Query<'_>) -> Response {
     let files = keeper.files();
+
+    let total = files.len();
 
     let mut filtered_files = query_files(files, args.query, None, args.intersect)
         .map(|file| file.clone().into())
@@ -115,5 +127,7 @@ pub fn query(keeper: &Keeper, args: Query<'_>) -> Vec<frontmatter_file::Short> {
 
     sort_with_params(args.sort_key, args.order_desc, &mut filtered_files);
 
-    paginate(filtered_files, args.offset, args.limit)
+    let files = paginate(filtered_files, args.offset, args.limit);
+
+    Response { files, total }
 }

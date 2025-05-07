@@ -71,12 +71,17 @@ type SingleResponse struct {
 	NextFileName string       `msgpack:"next_file_name"`
 }
 
-type ListResponse struct {
+type ShortResponse struct {
 	Name        string         `msgpack:"name"`
 	Frontmatter map[string]any `msgpack:"frontmatter,omitempty"`
 	OneLiner    string         `msgpack:"one_liner,omitempty"`
 	Modified    string         `msgpack:"modified"`
 	Created     string         `msgpack:"created"`
+}
+
+type ListResponse struct {
+	Files []ShortResponse `msgpack:"files"`
+	Total uint            `msgpack:"total"`
 }
 
 type Client struct {
@@ -90,7 +95,7 @@ func NewClient(socketPath string) *Client {
 	return &c
 }
 
-func (c *Client) runListRequest(listReq any, tag string) ([]ListResponse, error) {
+func (c *Client) runListRequest(listReq any, tag string) (*ListResponse, error) {
 	conn, err := net.Dial("unix", c.socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to dial: %w", err)
@@ -115,12 +120,12 @@ func (c *Client) runListRequest(listReq any, tag string) ([]ListResponse, error)
 
 	switch resp.Tag {
 	case "Ok":
-		var listResp []ListResponse
+		var listResp ListResponse
 		err := msgpack.Unmarshal(resp.Value, &listResp)
 		if err != nil {
 			return nil, fmt.Errorf("Could not unmarshal response value: %w", err)
 		}
-		return listResp, nil
+		return &listResp, nil
 	case "InternalServerError":
 		return nil, fmt.Errorf("Custard had internal server error")
 	default:
@@ -215,11 +220,11 @@ func (c *Client) QuerySingle(req QuerySingleRequest) (*SingleResponse, error) {
 	return c.runSingleRequest(req, "SingleQuery")
 }
 
-func (c *Client) GetList(req GetListRequest) ([]ListResponse, error) {
+func (c *Client) GetList(req GetListRequest) (*ListResponse, error) {
 	return c.runListRequest(req, "ListGet")
 }
 
-func (c *Client) QueryList(req QueryListRequest) ([]ListResponse, error) {
+func (c *Client) QueryList(req QueryListRequest) (*ListResponse, error) {
 	return c.runListRequest(req, "ListQuery")
 }
 

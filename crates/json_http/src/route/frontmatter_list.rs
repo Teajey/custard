@@ -36,14 +36,14 @@ fn get_inner(
         .transpose()
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    let files = custard_lib::list::get(
+    let response = custard_lib::list::get(
         keeper,
         custard_lib::list::Get::new(sort_key, order_desc, offset, limit),
     );
 
-    let headers = assign_headers(files.len());
+    let headers = assign_headers(response.total);
 
-    Ok((headers, files))
+    Ok((headers, response.files))
 }
 
 pub async fn get(
@@ -81,14 +81,14 @@ fn post_inner(
         .map_err(|_| StatusCode::BAD_REQUEST)?
         .unwrap_or_default();
 
-    let files = custard_lib::list::query(
+    let response = custard_lib::list::query(
         keeper,
         custard_lib::list::Query::new(query, sort_key, order_desc, offset, limit, intersect),
     );
 
-    let headers = assign_headers(files.len());
+    let headers = assign_headers(response.total);
 
-    Ok((headers, files))
+    Ok((headers, response.files))
 }
 
 pub async fn post(

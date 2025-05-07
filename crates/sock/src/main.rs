@@ -30,7 +30,7 @@ fn internal_server_error_bytes() -> Vec<u8> {
 #[serde(tag = "tag", content = "value")]
 enum Response<'a> {
     Single(Option<single::Response<'a>>),
-    List(Vec<frontmatter_file::Short>),
+    List(list::Response),
     Collate(Vec<String>),
 }
 
@@ -100,9 +100,9 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
 
     let out_buf = match resp {
         Response::Single(response) => rmp_serde::to_vec(&Result::Ok(response)),
-        Response::List(vec) => {
-            debug!("Sending list of length: {}", vec.len());
-            rmp_serde::to_vec(&Result::Ok(vec))
+        Response::List(list) => {
+            debug!("Sending list of length: {}", list.files.len());
+            rmp_serde::to_vec(&Result::Ok(list))
         }
         Response::Collate(vec) => rmp_serde::to_vec(&Result::Ok(vec)),
     };

@@ -85,7 +85,7 @@ func TestGetList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Request failed: %s", err)
 	}
-	respLen := len(resp)
+	respLen := len(resp.Files)
 	if respLen != 3 {
 		t.Fatalf("Unexpected response length: %d", respLen)
 	}
@@ -99,7 +99,7 @@ func TestQueryList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Request failed: %s", err)
 	}
-	respLen := len(resp)
+	respLen := len(resp.Files)
 	if respLen != 5 {
 		t.Fatalf("Unexpected response length: %d", respLen)
 	}
