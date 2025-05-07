@@ -119,11 +119,11 @@ impl<'a> Query<'a> {
 pub fn query(keeper: &Keeper, args: Query<'_>) -> Response {
     let files = keeper.files();
 
-    let total = files.len();
-
     let mut filtered_files = query_files(files, args.query, None, args.intersect)
         .map(|file| file.clone().into())
         .collect::<Vec<_>>();
+
+    let total = filtered_files.len();
 
     sort_with_params(args.sort_key, args.order_desc, &mut filtered_files);
 
