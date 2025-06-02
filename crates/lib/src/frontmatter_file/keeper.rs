@@ -153,7 +153,7 @@ impl notify::EventHandler for ArcMutex {
                 let path = match Utf8PathBuf::try_from(path.clone()) {
                     Ok(path) => path,
                     Err(err) => {
-                        eprintln!("Event filepath ({path:?}) was not UTF-8: {err}\n\nNon-UTF-8 paths not supported.");
+                        eprintln!("Event filepath ({}) was not UTF-8: {err}\n\nNon-UTF-8 paths not supported.", path.display());
                         return;
                     }
                 };

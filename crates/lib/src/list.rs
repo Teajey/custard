@@ -30,8 +30,7 @@ fn paginate(files: Vec<Short>, offset: Option<usize>, limit: Option<usize>) -> V
     }
 }
 
-#[derive(Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Debug, Deserialize)]
 pub struct Get<'a> {
     #[serde(default)]
     pub sort_key: Option<&'a str>,
@@ -87,8 +86,7 @@ pub fn get(keeper: &Keeper, args: Get<'_>) -> Response {
     response
 }
 
-#[derive(Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Debug, Deserialize)]
 pub struct Query<'a> {
     pub query: FrontmatterQuery,
     #[serde(default)]

@@ -30,8 +30,7 @@ fn collate_strings_from_files<'a>(
         .collect()
 }
 
-#[derive(Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Debug, Deserialize)]
 pub struct Get<'a> {
     pub key: &'a str,
 }
@@ -64,8 +63,7 @@ pub fn get(keeper: &Keeper, args: Get<'_>) -> Vec<String> {
     response
 }
 
-#[derive(Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Debug, Deserialize)]
 pub struct Query<'a> {
     pub key: &'a str,
     pub query: FrontmatterQuery,

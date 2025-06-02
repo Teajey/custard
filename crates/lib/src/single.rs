@@ -45,16 +45,14 @@ fn get_prev_and_next_file_names<'a>(
     (prev_file_name, next_file_name)
 }
 
-#[derive(Serialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Debug, Serialize)]
 pub struct Response<'a> {
     pub file: &'a FrontmatterFile,
     pub prev_file_name: Option<&'a str>,
     pub next_file_name: Option<&'a str>,
 }
 
-#[derive(Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Debug, Deserialize)]
 pub struct Get<'a> {
     pub name: &'a str,
     #[serde(default)]
@@ -100,8 +98,7 @@ pub fn get<'a>(keeper: &'a Keeper, args: Get<'_>) -> Option<Response<'a>> {
     response
 }
 
-#[derive(Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Debug, Deserialize)]
 pub struct Query<'a> {
     pub name: &'a str,
     pub query: FrontmatterQuery,
