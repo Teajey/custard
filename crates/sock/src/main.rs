@@ -98,9 +98,7 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
 
     let out_buf = match resp {
         Response::Single(response) => rmp_serde::to_vec(&Result::Ok(response)),
-        Response::List(list) => {
-            rmp_serde::to_vec(&Result::Ok(list))
-        }
+        Response::List(list) => rmp_serde::to_vec(&Result::Ok(list)),
         Response::Collate(vec) => rmp_serde::to_vec(&Result::Ok(vec)),
     };
 
@@ -135,6 +133,7 @@ async fn accept_streams(
                         break;
                     }
                     Ok(n) => {
+                        debug!("read {n} bytes");
                         let out_buf = in_buf_2_out_buf(&mf, &buf[..n]);
                         let Err(err) = stream.write_all(&out_buf).await else {
                             continue;
