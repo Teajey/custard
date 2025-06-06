@@ -253,18 +253,18 @@ mod test {
             super::Get::new("something.md", Some("created"), true),
         )
         .unwrap();
-        assert_eq!(None, response.prev_file_name);
-        assert_eq!(Some("about.md"), response.next_file_name);
+        assert_eq!(None, response.next_file_name);
+        assert_eq!(Some("about.md"), response.prev_file_name);
 
         let response =
             super::get(&keeper, super::Get::new("about.md", Some("created"), true)).unwrap();
-        assert_eq!(Some("something.md"), response.prev_file_name);
-        assert_eq!(Some("blah.md"), response.next_file_name);
+        assert_eq!(Some("something.md"), response.next_file_name);
+        assert_eq!(Some("blah.md"), response.prev_file_name);
 
         let response =
             super::get(&keeper, super::Get::new("blah.md", Some("created"), true)).unwrap();
-        assert_eq!(None, response.next_file_name);
-        assert_eq!(Some("about.md"), response.prev_file_name);
+        assert_eq!(None, response.prev_file_name);
+        assert_eq!(Some("about.md"), response.next_file_name);
     }
 
     #[test]
@@ -280,23 +280,23 @@ mod test {
             super::Query::new("about.md", query.clone(), Some("created"), true, false),
         )
         .unwrap();
-        assert_eq!(None, response.prev_file_name);
-        assert_eq!(Some("blah.md"), response.next_file_name);
+        assert_eq!(None, response.next_file_name);
+        assert_eq!(Some("blah.md"), response.prev_file_name);
 
         let response = super::query(
             &keeper,
             super::Query::new("blah.md", query.clone(), Some("created"), true, false),
         )
         .unwrap();
-        assert_eq!(Some("about.md"), response.prev_file_name);
-        assert_eq!(None, response.next_file_name);
+        assert_eq!(Some("about.md"), response.next_file_name);
+        assert_eq!(None, response.prev_file_name);
 
         let response = super::query(
             &keeper,
             super::Query::new("something.md", query, Some("created"), true, false),
         )
         .unwrap();
-        assert_eq!(None, response.prev_file_name);
-        assert_eq!(Some("about.md"), response.next_file_name);
+        assert_eq!(None, response.next_file_name);
+        assert_eq!(Some("about.md"), response.prev_file_name);
     }
 }

@@ -20,12 +20,12 @@ func TestGetSingle(t *testing.T) {
 	if resp == nil {
 		t.Fatalf("Didn't find file")
 	}
-	expectedPrevFileName := "chapter-1-tokyo.md"
+	expectedPrevFileName := "canned-cake-canned-cake.md"
 	if resp.PrevFileName != expectedPrevFileName {
 		t.Fail()
 		t.Logf("Prev file name not '%s'. Found: %s", expectedPrevFileName, resp.PrevFileName)
 	}
-	expectedNextFileName := "canned-cake-canned-cake.md"
+	expectedNextFileName := "chapter-1-tokyo.md"
 	if resp.NextFileName != expectedNextFileName {
 		t.Fail()
 		t.Logf("Next file name not '%s'. Found: %s", expectedNextFileName, resp.NextFileName)
@@ -65,12 +65,12 @@ func TestQuerySingle(t *testing.T) {
 	if resp == nil {
 		t.Fatalf("Didn't find file")
 	}
-	expectedPrevFileName := "2024-01-14.md"
+	expectedPrevFileName := "aoc23day4.md"
 	if resp.PrevFileName != expectedPrevFileName {
 		t.Fail()
 		t.Logf("Prev file name not '%s'. Found: %s", expectedPrevFileName, resp.PrevFileName)
 	}
-	expectedNextFileName := "aoc23day4.md"
+	expectedNextFileName := "2024-01-14.md"
 	if resp.NextFileName != expectedNextFileName {
 		t.Fail()
 		t.Logf("Next file name not '%s'. Found: %s", expectedNextFileName, resp.NextFileName)
