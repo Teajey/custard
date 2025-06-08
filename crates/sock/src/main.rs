@@ -20,15 +20,10 @@ enum Result<T: Serialize> {
     InternalServerError(()),
 }
 
-// TODO: Ideally this would be statically generated
-fn internal_server_error_bytes() -> Vec<u8> {
-    let out_buf = rmp_serde::to_vec(&Result::<()>::InternalServerError(()))
-        .expect("Result::InternalServerError does not serialize");
-
-    debug!("Sending error bytes: {out_buf:x?}");
-
-    out_buf
-}
+static INTERNAL_SERVER_ERROR_BYTES: [u8; 22] = [
+    146, 179, 73, 110, 116, 101, 114, 110, 97, 108, 83, 101, 114, 118, 101, 114, 69, 114, 114, 111,
+    114, 192,
+];
 
 #[derive(Serialize, Debug)]
 #[serde(tag = "tag", content = "value")]
@@ -72,7 +67,7 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
         Ok(req) => req,
         Err(err) => {
             error!("stream request decode failed: {err}");
-            return internal_server_error_bytes();
+            return INTERNAL_SERVER_ERROR_BYTES.to_vec();
         }
     };
 
@@ -80,7 +75,7 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
         Ok(keeper) => keeper,
         Err(err) => {
             error!("Failed to lock markdown files: {err}");
-            return internal_server_error_bytes();
+            return INTERNAL_SERVER_ERROR_BYTES.to_vec();
         }
     };
     let resp = req.process(&keeper);
@@ -98,7 +93,7 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
         }
         Err(err) => {
             error!("Failed to serialize response: {err}");
-            internal_server_error_bytes()
+            INTERNAL_SERVER_ERROR_BYTES.to_vec()
         }
     }
 }
@@ -188,16 +183,12 @@ async fn main() {
 
 #[cfg(test)]
 mod test {
-    use super::Result;
+    use super::*;
 
     #[test]
     fn result_internal_server_error_bytes() {
         let bytes = rmp_serde::to_vec(&Result::<()>::InternalServerError(())).unwrap();
-        let hex = format!("{bytes:x?}");
-        assert_eq!(
-            "[91, b3, 49, 6e, 74, 65, 72, 6e, 61, 6c, 53, 65, 72, 76, 65, 72, 45, 72, 72, 6f, 72]",
-            hex
-        );
+        assert_eq!(INTERNAL_SERVER_ERROR_BYTES.to_vec(), bytes);
     }
 
     #[test]
