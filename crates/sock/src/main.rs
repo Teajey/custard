@@ -17,6 +17,8 @@ use tracing::{debug, error, info};
 #[serde(tag = "tag", content = "value")]
 enum Result<T: Serialize> {
     Ok(T),
+    #[allow(dead_code)]
+    // unit value is needed because msgpack will panic if `value` is not present
     InternalServerError(()),
 }
 
