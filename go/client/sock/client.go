@@ -1,7 +1,9 @@
 package sock
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math"
 	"net"
 
 	"github.com/vmihailenco/msgpack/v5"
@@ -17,44 +19,29 @@ type taggedResponse struct {
 	Value msgpack.RawMessage `msgpack:"value"`
 }
 
-type GetSingleRequest struct {
+type Query struct {
+	Map       map[string]any `msgpack:"map"`
+	Intersect bool           `msgpack:"intersect"`
+}
+
+type SingleRequest struct {
 	Name      string `msgpack:"name"`
+	Query     *Query `msgpack:"query,omitempty"`
 	SortKey   string `msgpack:"sort_key,omitempty"`
 	OrderDesc bool   `msgpack:"order_desc,omitempty"`
 }
 
-type QuerySingleRequest struct {
-	Name      string         `msgpack:"name"`
-	Query     map[string]any `msgpack:"query"`
-	SortKey   string         `msgpack:"sort_key,omitempty"`
-	OrderDesc bool           `msgpack:"order_desc,omitempty"`
-	Intersect bool           `msgpack:"intersect"`
-}
-
-type GetListRequest struct {
+type ListRequest struct {
+	Query     *Query `msgpack:"query,omitempty"`
 	SortKey   string `msgpack:"sort_key,omitempty"`
 	OrderDesc bool   `msgpack:"order_desc,omitempty"`
 	Offset    uint   `msgpack:"offset,omitempty"`
 	Limit     uint   `msgpack:"limit,omitempty"`
 }
 
-type QueryListRequest struct {
-	Query     map[string]any `msgpack:"query"`
-	SortKey   string         `msgpack:"sort_key,omitempty"`
-	OrderDesc bool           `msgpack:"order_desc,omitempty"`
-	Offset    uint           `msgpack:"offset,omitempty"`
-	Limit     uint           `msgpack:"limit,omitempty"`
-	Intersect bool           `msgpack:"intersect,omitempty"`
-}
-
-type GetCollateRequest struct {
-	Key string `msgpack:"key,omitempty"`
-}
-
-type QueryCollateRequest struct {
-	Query     map[string]any `msgpack:"query"`
-	Key       string         `msgpack:"key,omitempty"`
-	Intersect bool           `msgpack:"intersect,omitempty"`
+type CollateRequest struct {
+	Query *Query `msgpack:"query,omitempty"`
+	Key   string `msgpack:"key"`
 }
 
 type FileResponse struct {
@@ -95,21 +82,45 @@ func NewClient(socketPath string) *Client {
 	return &c
 }
 
-func (c *Client) runListRequest(listReq any, tag string) (*ListResponse, error) {
+func encodeUint32BufLength(buf []byte) ([]byte, error) {
+	bufLength := len(buf)
+	if bufLength > math.MaxUint32 {
+		return nil, fmt.Errorf("buffer too large: %d (max %d)", bufLength, math.MaxUint32)
+	}
+	lengthBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(lengthBytes, uint32(len(buf)))
+	return lengthBytes, nil
+}
+
+func (c *Client) List(req ListRequest) (*ListResponse, error) {
 	conn, err := net.Dial("unix", c.socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to dial: %w", err)
 	}
 	defer conn.Close()
 
-	req := taggedRequest{
-		Tag:   tag,
-		Value: listReq,
+	listReq := taggedRequest{
+		Tag:   "List",
+		Value: req,
 	}
 
 	enc := msgpack.NewEncoder(conn)
-	if err := enc.Encode(req); err != nil {
+	enc.UseArrayEncodedStructs(false)
+	buf, err := msgpack.Marshal(listReq)
+	if err != nil {
 		return nil, fmt.Errorf("Failed to encode request: %w", err)
+	}
+	lengthBytes, err := encodeUint32BufLength(buf)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to encode request length: %w", err)
+	}
+	_, err = conn.Write(lengthBytes)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to send request length: %w", err)
+	}
+	_, err = conn.Write(buf)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to send request: %w", err)
 	}
 
 	var resp *taggedResponse
@@ -133,21 +144,35 @@ func (c *Client) runListRequest(listReq any, tag string) (*ListResponse, error) 
 	}
 }
 
-func (c *Client) runSingleRequest(singleReq any, tag string) (*SingleResponse, error) {
+func (c *Client) Single(req SingleRequest) (*SingleResponse, error) {
 	conn, err := net.Dial("unix", c.socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to dial: %w", err)
 	}
 	defer conn.Close()
 
-	req := taggedRequest{
-		Tag:   tag,
-		Value: singleReq,
+	singleReq := taggedRequest{
+		Tag:   "Single",
+		Value: req,
 	}
 
 	enc := msgpack.NewEncoder(conn)
-	if err := enc.Encode(req); err != nil {
+	enc.UseArrayEncodedStructs(false)
+	buf, err := msgpack.Marshal(singleReq)
+	if err != nil {
 		return nil, fmt.Errorf("Failed to encode request: %w", err)
+	}
+	lengthBytes, err := encodeUint32BufLength(buf)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to encode request length: %w", err)
+	}
+	_, err = conn.Write(lengthBytes)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to send request length: %w", err)
+	}
+	_, err = conn.Write(buf)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to send request: %w", err)
 	}
 
 	var resp *taggedResponse
@@ -174,21 +199,35 @@ func (c *Client) runSingleRequest(singleReq any, tag string) (*SingleResponse, e
 	}
 }
 
-func (c *Client) runCollateRequest(collateReq any, tag string) ([]string, error) {
+func (c *Client) Collate(req CollateRequest) ([]string, error) {
 	conn, err := net.Dial("unix", c.socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to dial: %w", err)
 	}
 	defer conn.Close()
 
-	req := taggedRequest{
-		Tag:   tag,
-		Value: collateReq,
+	collateReq := taggedRequest{
+		Tag:   "Collate",
+		Value: req,
 	}
 
 	enc := msgpack.NewEncoder(conn)
-	if err := enc.Encode(req); err != nil {
+	enc.UseArrayEncodedStructs(false)
+	buf, err := msgpack.Marshal(collateReq)
+	if err != nil {
 		return nil, fmt.Errorf("Failed to encode request: %w", err)
+	}
+	lengthBytes, err := encodeUint32BufLength(buf)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to encode request length: %w", err)
+	}
+	_, err = conn.Write(lengthBytes)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to send request length: %w", err)
+	}
+	_, err = conn.Write(buf)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to send request: %w", err)
 	}
 
 	var resp *taggedResponse
@@ -210,28 +249,4 @@ func (c *Client) runCollateRequest(collateReq any, tag string) ([]string, error)
 	default:
 		return nil, fmt.Errorf("Unrecognised tag from server: %s", resp.Tag)
 	}
-}
-
-func (c *Client) GetSingle(req GetSingleRequest) (*SingleResponse, error) {
-	return c.runSingleRequest(req, "SingleGet")
-}
-
-func (c *Client) QuerySingle(req QuerySingleRequest) (*SingleResponse, error) {
-	return c.runSingleRequest(req, "SingleQuery")
-}
-
-func (c *Client) GetList(req GetListRequest) (*ListResponse, error) {
-	return c.runListRequest(req, "ListGet")
-}
-
-func (c *Client) QueryList(req QueryListRequest) (*ListResponse, error) {
-	return c.runListRequest(req, "ListQuery")
-}
-
-func (c *Client) GetCollate(req GetCollateRequest) ([]string, error) {
-	return c.runCollateRequest(req, "CollateGet")
-}
-
-func (c *Client) QueryCollate(req QueryCollateRequest) ([]string, error) {
-	return c.runCollateRequest(req, "CollateQuery")
 }

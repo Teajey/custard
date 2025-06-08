@@ -63,9 +63,16 @@ impl QueryValue {
 
 #[derive(Deserialize, Debug)]
 #[cfg_attr(debug_assertions, derive(Clone))]
-pub struct FrontmatterQuery(pub HashMap<String, QueryValue>);
+pub struct FrontmatterQueryMap(pub HashMap<String, QueryValue>);
 
-impl FrontmatterQuery {
+#[derive(Debug, Deserialize)]
+#[cfg_attr(debug_assertions, derive(Clone))]
+pub struct FrontmatterQuery {
+    pub map: FrontmatterQueryMap,
+    pub intersect: bool,
+}
+
+impl FrontmatterQueryMap {
     #[must_use]
     pub fn is_subset(&self, json_frontmatter: &serde_json::Map<String, serde_json::Value>) -> bool {
         for (key, value) in &self.0 {
@@ -109,7 +116,7 @@ impl FrontmatterQuery {
 mod test {
     use serde_json::json;
 
-    use super::FrontmatterQuery;
+    use super::FrontmatterQueryMap;
 
     macro_rules! deserial {
         ($tokens:tt) => {
@@ -125,7 +132,7 @@ mod test {
 
     #[test]
     fn is_subset() {
-        let frontmatter_query: FrontmatterQuery = deserial!({
+        let frontmatter_query: FrontmatterQueryMap = deserial!({
             "salty": "pork"
         });
 
@@ -135,7 +142,7 @@ mod test {
 
     #[test]
     fn is_intersect() {
-        let frontmatter_query: FrontmatterQuery = deserial!({
+        let frontmatter_query: FrontmatterQueryMap = deserial!({
             "listed": true,
             "tags": ["essay", "film"]
         });
@@ -145,7 +152,7 @@ mod test {
             "tags": ["essay"]
         })));
 
-        let frontmatter_query: FrontmatterQuery = deserial!({
+        let frontmatter_query: FrontmatterQueryMap = deserial!({
             "listed": true,
             "tags": ["essay", "film"]
         });

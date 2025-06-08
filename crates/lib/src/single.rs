@@ -53,28 +53,25 @@ pub struct Response<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Get<'a> {
+pub struct Args<'a> {
     pub name: &'a str,
+    #[serde(default)]
+    pub query: Option<FrontmatterQuery>,
     #[serde(default)]
     pub sort_key: Option<&'a str>,
     #[serde(default)]
     pub order_desc: bool,
 }
 
-impl<'a> Get<'a> {
-    #[must_use]
-    pub fn new(name: &'a str, sort_key: Option<&'a str>, order_desc: bool) -> Self {
-        Self {
-            name,
-            sort_key,
-            order_desc,
-        }
-    }
-}
-
 #[allow(clippy::needless_pass_by_value)]
-fn inner_get<'a, 'b>(keeper: &'a Keeper, args: Get<'b>) -> Option<Response<'a>> {
-    let mut files = keeper.files().collect::<Vec<&'a FrontmatterFile>>();
+fn inner<'a, 'b: 'a>(keeper: &'a Keeper, args: Args<'b>) -> Option<Response<'a>> {
+    let files = keeper.files();
+
+    let mut files = if let Some(query) = args.query {
+        query_files(files, query, Some(args.name)).collect::<Vec<_>>()
+    } else {
+        files.collect::<Vec<_>>()
+    };
 
     sort_with_params(args.sort_key, args.order_desc, &mut files);
 
@@ -91,69 +88,9 @@ fn inner_get<'a, 'b>(keeper: &'a Keeper, args: Get<'b>) -> Option<Response<'a>> 
 
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn get<'a>(keeper: &'a Keeper, args: Get<'_>) -> Option<Response<'a>> {
-    debug!("Received get request: {args:?}");
-    let response = inner_get(keeper, args);
-    debug!("Sending get response: {response:?}");
-    response
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Query<'a> {
-    pub name: &'a str,
-    pub query: FrontmatterQuery,
-    #[serde(default)]
-    pub sort_key: Option<&'a str>,
-    #[serde(default)]
-    pub order_desc: bool,
-    #[serde(default)]
-    pub intersect: bool,
-}
-
-impl<'a> Query<'a> {
-    #[must_use]
-    pub fn new(
-        name: &'a str,
-        query: FrontmatterQuery,
-        sort_key: Option<&'a str>,
-        order_desc: bool,
-        intersect: bool,
-    ) -> Self {
-        Self {
-            name,
-            query,
-            sort_key,
-            order_desc,
-            intersect,
-        }
-    }
-}
-
-#[allow(clippy::needless_pass_by_value)]
-fn inner_query<'a, 'b: 'a>(keeper: &'a Keeper, args: Query<'b>) -> Option<Response<'a>> {
-    let files = keeper.files();
-
-    let mut filtered_files =
-        query_files(files, args.query, Some(args.name), args.intersect).collect::<Vec<_>>();
-
-    sort_with_params(args.sort_key, args.order_desc, &mut filtered_files);
-
-    let (i, file) = find_file_and_index(&filtered_files, args.name)?;
-
-    let (prev_file_name, next_file_name) = get_prev_and_next_file_names(&filtered_files, i);
-
-    Some(Response {
-        file,
-        prev_file_name,
-        next_file_name,
-    })
-}
-
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-pub fn query<'a, 'b: 'a>(keeper: &'a Keeper, args: Query<'b>) -> Option<Response<'a>> {
+pub fn single<'a, 'b: 'a>(keeper: &'a Keeper, args: Args<'b>) -> Option<Response<'a>> {
     debug!("Received query request: {args:?}");
-    let response = inner_query(keeper, args);
+    let response = inner(keeper, args);
     debug!("Sending query response: {response:?}");
     response
 }
@@ -169,7 +106,7 @@ mod test {
 
     use crate::{
         frontmatter_file::{FrontmatterFile, Keeper},
-        frontmatter_query::{FrontmatterQuery, QueryValue, Scalar},
+        frontmatter_query::{FrontmatterQuery, FrontmatterQueryMap, QueryValue, Scalar},
     };
 
     macro_rules! s {
@@ -248,21 +185,42 @@ mod test {
     fn get() {
         let keeper = make_test_keeper();
 
-        let response = super::get(
+        let response = super::single(
             &keeper,
-            super::Get::new("something.md", Some("created"), true),
+            super::Args {
+                name: "something.md",
+                query: None,
+                sort_key: Some("created"),
+                order_desc: true,
+            },
         )
         .unwrap();
         assert_eq!(None, response.next_file_name);
         assert_eq!(Some("about.md"), response.prev_file_name);
 
-        let response =
-            super::get(&keeper, super::Get::new("about.md", Some("created"), true)).unwrap();
+        let response = super::single(
+            &keeper,
+            super::Args {
+                name: "about.md",
+                query: None,
+                sort_key: Some("created"),
+                order_desc: true,
+            },
+        )
+        .unwrap();
         assert_eq!(Some("something.md"), response.next_file_name);
         assert_eq!(Some("blah.md"), response.prev_file_name);
 
-        let response =
-            super::get(&keeper, super::Get::new("blah.md", Some("created"), true)).unwrap();
+        let response = super::single(
+            &keeper,
+            super::Args {
+                name: "blah.md",
+                query: None,
+                sort_key: Some("created"),
+                order_desc: true,
+            },
+        )
+        .unwrap();
         assert_eq!(None, response.prev_file_name);
         assert_eq!(Some("about.md"), response.next_file_name);
     }
@@ -273,27 +231,51 @@ mod test {
 
         let mut query_inner = HashMap::new();
         query_inner.insert(s!("tag"), QueryValue::Scalar(Scalar::String(s!("blue"))));
-        let query = FrontmatterQuery(query_inner);
+        let query_map = FrontmatterQueryMap(query_inner);
 
-        let response = super::query(
+        let response = super::single(
             &keeper,
-            super::Query::new("about.md", query.clone(), Some("created"), true, false),
+            super::Args {
+                name: "about.md",
+                query: Some(FrontmatterQuery {
+                    map: query_map.clone(),
+                    intersect: false,
+                }),
+                sort_key: Some("created"),
+                order_desc: true,
+            },
         )
         .unwrap();
         assert_eq!(None, response.next_file_name);
         assert_eq!(Some("blah.md"), response.prev_file_name);
 
-        let response = super::query(
+        let response = super::single(
             &keeper,
-            super::Query::new("blah.md", query.clone(), Some("created"), true, false),
+            super::Args {
+                name: "blah.md",
+                query: Some(FrontmatterQuery {
+                    map: query_map.clone(),
+                    intersect: false,
+                }),
+                sort_key: Some("created"),
+                order_desc: true,
+            },
         )
         .unwrap();
         assert_eq!(Some("about.md"), response.next_file_name);
         assert_eq!(None, response.prev_file_name);
 
-        let response = super::query(
+        let response = super::single(
             &keeper,
-            super::Query::new("something.md", query, Some("created"), true, false),
+            super::Args {
+                name: "something.md",
+                query: Some(FrontmatterQuery {
+                    map: query_map,
+                    intersect: false,
+                }),
+                sort_key: Some("created"),
+                order_desc: true,
+            },
         )
         .unwrap();
         assert_eq!(None, response.next_file_name);

@@ -31,63 +31,21 @@ fn collate_strings_from_files<'a>(
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Get<'a> {
+pub struct Args<'a> {
     pub key: &'a str,
-}
-
-impl<'a> Get<'a> {
-    #[must_use]
-    pub fn new(key: &'a str) -> Self {
-        Self { key }
-    }
-}
-
-#[allow(clippy::needless_pass_by_value)]
-fn inner_get(keeper: &Keeper, args: Get<'_>) -> Vec<String> {
-    let files = keeper.files();
-
-    let mut values = collate_strings_from_files(files, args.key);
-
-    values.sort();
-    values.dedup();
-
-    values
-}
-
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-pub fn get(keeper: &Keeper, args: Get<'_>) -> Vec<String> {
-    debug!("Received get request: {args:?}");
-    let response = inner_get(keeper, args);
-    debug!("Sending get response: {response:?}");
-    response
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Query<'a> {
-    pub key: &'a str,
-    pub query: FrontmatterQuery,
     #[serde(default)]
-    pub intersect: bool,
+    pub query: Option<FrontmatterQuery>,
 }
 
-impl<'a> Query<'a> {
-    #[must_use]
-    pub fn new(key: &'a str, query: FrontmatterQuery, intersect: bool) -> Self {
-        Self {
-            key,
-            query,
-            intersect,
-        }
-    }
-}
-
-fn inner_query(keeper: &Keeper, args: Query<'_>) -> Vec<String> {
+fn inner(keeper: &Keeper, args: Args<'_>) -> Vec<String> {
     let files = keeper.files();
 
-    let files = query_files(files, args.query, None, args.intersect);
-
-    let mut values = collate_strings_from_files(files, args.key);
+    let mut values = if let Some(query) = args.query {
+        let files = query_files(files, query, None);
+        collate_strings_from_files(files, args.key)
+    } else {
+        collate_strings_from_files(files, args.key)
+    };
 
     values.sort();
     values.dedup();
@@ -96,9 +54,9 @@ fn inner_query(keeper: &Keeper, args: Query<'_>) -> Vec<String> {
 }
 
 #[must_use]
-pub fn query(keeper: &Keeper, args: Query<'_>) -> Vec<String> {
-    debug!("Received query request: {args:?}");
-    let response = inner_query(keeper, args);
-    debug!("Sending query response: {response:?}");
+pub fn collate(keeper: &Keeper, args: Args<'_>) -> Vec<String> {
+    debug!("Received collate request: {args:?}");
+    let response = inner(keeper, args);
+    debug!("Sending collate response: {response:?}");
     response
 }

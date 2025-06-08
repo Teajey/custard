@@ -31,7 +31,6 @@ fn query_files<'a>(
     files: impl Iterator<Item = &'a FrontmatterFile>,
     query: FrontmatterQuery,
     name: Option<&'a str>,
-    intersect: bool,
 ) -> impl Iterator<Item = &'a FrontmatterFile> {
     files.filter(move |file| {
         if let Some(name) = name {
@@ -41,12 +40,12 @@ fn query_files<'a>(
         }
         let Some(frontmatter) = file.frontmatter() else {
             // if query is '{}', include this
-            return query.is_empty();
+            return query.map.is_empty();
         };
-        if intersect {
-            query.is_intersect(&markup::yaml_to_json(frontmatter))
+        if query.intersect {
+            query.map.is_intersect(&markup::yaml_to_json(frontmatter))
         } else {
-            query.is_subset(&markup::yaml_to_json(frontmatter))
+            query.map.is_subset(&markup::yaml_to_json(frontmatter))
         }
     })
 }

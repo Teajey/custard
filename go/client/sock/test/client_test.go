@@ -9,10 +9,8 @@ import (
 
 func TestGetSingle(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.GetSingle(sock.GetSingleRequest{
-		Name:      "chai-cheese.md",
-		SortKey:   "",
-		OrderDesc: false,
+	resp, err := client.Single(sock.SingleRequest{
+		Name: "chai-cheese.md",
 	})
 	if err != nil {
 		t.Fatalf("Request failed: %s", err)
@@ -34,7 +32,7 @@ func TestGetSingle(t *testing.T) {
 
 func TestGetSingleWithNoFrontmatter(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.GetSingle(sock.GetSingleRequest{
+	resp, err := client.Single(sock.SingleRequest{
 		Name: "about.md",
 	})
 	if err != nil {
@@ -50,14 +48,13 @@ func TestGetSingleWithNoFrontmatter(t *testing.T) {
 
 func TestQuerySingle(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.QuerySingle(sock.QuerySingleRequest{
+	resp, err := client.Single(sock.SingleRequest{
 		Name: "chai-cheese.md",
-		Query: map[string]any{
-			"tags": []string{"code"},
+		Query: &sock.Query{
+			Map: map[string]any{
+				"tags": []string{"code"},
+			},
 		},
-		SortKey:   "",
-		OrderDesc: false,
-		Intersect: false,
 	})
 	if err != nil {
 		t.Fatalf("Request failed: %s", err)
@@ -79,7 +76,7 @@ func TestQuerySingle(t *testing.T) {
 
 func TestGetList(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.GetList(sock.GetListRequest{
+	resp, err := client.List(sock.ListRequest{
 		Limit: 3,
 	})
 	if err != nil {
@@ -96,8 +93,12 @@ func TestGetList(t *testing.T) {
 
 func TestQueryList(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.QueryList(sock.QueryListRequest{
-		Query: map[string]any{"tags": []string{"code"}},
+	resp, err := client.List(sock.ListRequest{
+		Query: &sock.Query{
+			Map: map[string]any{
+				"tags": []string{"code"},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf("Request failed: %s", err)
@@ -113,7 +114,7 @@ func TestQueryList(t *testing.T) {
 
 func TestGetCollate(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.GetCollate(sock.GetCollateRequest{
+	resp, err := client.Collate(sock.CollateRequest{
 		Key: "tags",
 	})
 	if err != nil {
@@ -127,9 +128,13 @@ func TestGetCollate(t *testing.T) {
 
 func TestQueryCollate(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
-	resp, err := client.QueryCollate(sock.QueryCollateRequest{
-		Key:   "tags",
-		Query: map[string]any{"tags": []string{"code"}},
+	resp, err := client.Collate(sock.CollateRequest{
+		Key: "tags",
+		Query: &sock.Query{
+			Map: map[string]any{
+				"tags": []string{"code"},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf("Request failed: %s", err)
