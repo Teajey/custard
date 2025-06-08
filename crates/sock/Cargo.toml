@@ -9,7 +9,7 @@ repository = "https://github.com/Teajey/custard"
 [dependencies]
 anyhow = "1.0.75"
 camino = "1.1.6"
-custard_lib = { path = "../lib" }
+custard_lib = { workspace = true }
 notify = "5.2.0"
 rmp-serde = "1.3.0"
 serde = { version = "1.0.188", features = ["serde_derive"] }
