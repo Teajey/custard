@@ -112,39 +112,33 @@ async fn accept_streams(
         debug!("accepted stream");
         let mf = markdown_files.clone();
         tokio::spawn(async move {
-            let mut buf = vec![0; 1024];
+            let mut buf = Vec::new();
 
-            loop {
-                // FIXME: I'm not confident in the integrity of the current code in this loop
-                debug!("reading stream");
-                let request_length = match stream.read_u32().await {
-                    Ok(n) => n,
-                    Err(err) => {
-                        error!("Failed to read request length: {err}");
-                        0
+            debug!("reading stream");
+            let request_length = match stream.read_u32().await {
+                Ok(n) => n,
+                Err(err) => {
+                    error!("Failed to read request length: {err}");
+                    if let Err(err) = stream.shutdown().await {
+                        error!("stream shutdown failed: {err}");
                     }
-                };
-                debug!("received request length: {request_length}");
-                buf.resize(request_length as usize, 0);
-                match stream.read_exact(&mut buf).await {
-                    Ok(0) => {
-                        debug!("stream terminated");
-                        break;
+                    return;
+                }
+            };
+            debug!("received request length: {request_length}");
+            buf.resize(request_length as usize, 0);
+            match stream.read_exact(&mut buf).await {
+                Ok(n) => {
+                    debug!("read {n} bytes");
+                    let out_buf = in_buf_2_out_buf(&mf, &buf[..n]);
+                    if let Err(err) = stream.write_all(&out_buf).await {
+                        error!("stream write failed: {err}");
+                    } else {
+                        debug!("successfully resolved request/response");
                     }
-                    Ok(n) => {
-                        debug!("read {n} bytes");
-                        let out_buf = in_buf_2_out_buf(&mf, &buf[..n]);
-                        if let Err(err) = stream.write_all(&out_buf).await {
-                            error!("stream write failed: {err}");
-                        } else {
-                            debug!("resolved request/response");
-                            debug!("stream terminated");
-                            break;
-                        }
-                    }
-                    Err(err) => {
-                        error!("stream read failed: {err}");
-                    }
+                }
+                Err(err) => {
+                    error!("stream read failed: {err}");
                 }
             }
         });
