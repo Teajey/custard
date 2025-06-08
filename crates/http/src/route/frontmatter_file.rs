@@ -8,7 +8,7 @@ use axum::{
 };
 use custard_lib::{
     frontmatter_file::{self, FrontmatterFile},
-    frontmatter_query::FrontmatterQuery,
+    frontmatter_query::{FrontmatterQuery, FrontmatterQueryMap},
 };
 
 use super::lock_keeper;
@@ -69,7 +69,7 @@ fn post_inner(
     files: &frontmatter_file::keeper::ArcMutex,
     params: &HashMap<String, String>,
     name: &str,
-    query: FrontmatterQuery,
+    query_map: FrontmatterQueryMap,
 ) -> Result<(HeaderMap, String), StatusCode> {
     let keeper = &*lock_keeper(files)?;
 
@@ -82,9 +82,17 @@ fn post_inner(
         .map_err(|_| StatusCode::BAD_REQUEST)?
         .unwrap_or_default();
 
-    let response = custard_lib::single::query(
+    let response = custard_lib::single::single(
         keeper,
-        custard_lib::single::Query::new(name, query, sort_key, order_desc, intersect),
+        custard_lib::single::Args {
+            name,
+            query: Some(FrontmatterQuery {
+                map: query_map,
+                intersect,
+            }),
+            sort_key,
+            order_desc,
+        },
     )
     .ok_or(StatusCode::NOT_FOUND)?;
 
@@ -101,7 +109,7 @@ pub async fn post(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
     params: Query<HashMap<String, String>>,
     Path(name): Path<String>,
-    Json(query): Json<FrontmatterQuery>,
+    Json(query): Json<FrontmatterQueryMap>,
 ) -> Result<(HeaderMap, String), StatusCode> {
     let result = post_inner(&markdown_files, &params, &name, query)?;
 
@@ -118,9 +126,14 @@ fn get_inner(
     let order_desc = "desc" == params.get("order").map_or("desc", Deref::deref);
     let sort_key = params.get("sort").map(Deref::deref);
 
-    let response = custard_lib::single::get(
+    let response = custard_lib::single::single(
         keeper,
-        custard_lib::single::Get::new(name, sort_key, order_desc),
+        custard_lib::single::Args {
+            name,
+            query: None,
+            sort_key,
+            order_desc,
+        },
     )
     .ok_or(StatusCode::NOT_FOUND)?;
 

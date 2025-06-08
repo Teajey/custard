@@ -17,14 +17,15 @@ use tracing::{debug, error, info};
 #[serde(tag = "tag", content = "value")]
 enum Result<T: Serialize> {
     Ok(T),
-    InternalServerError,
+    #[allow(dead_code)]
+    // unit value is needed because msgpack will panic if `value` is not present
+    InternalServerError(()),
 }
 
-// TODO: Ideally this would be statically generated
-fn internal_server_error_bytes() -> Vec<u8> {
-    rmp_serde::to_vec(&Result::<()>::InternalServerError)
-        .expect("Result::InternalServerError does not serialize")
-}
+static INTERNAL_SERVER_ERROR_BYTES: [u8; 22] = [
+    146, 179, 73, 110, 116, 101, 114, 110, 97, 108, 83, 101, 114, 118, 101, 114, 69, 114, 114, 111,
+    114, 192,
+];
 
 #[derive(Serialize, Debug)]
 #[serde(tag = "tag", content = "value")]
@@ -38,39 +39,24 @@ enum Response<'a> {
 #[serde(tag = "tag", content = "value")]
 enum Request<'a> {
     #[serde(borrow)]
-    SingleGet(single::Get<'a>),
-    SingleQuery(single::Query<'a>),
-    ListGet(list::Get<'a>),
-    ListQuery(list::Query<'a>),
-    CollateGet(collate::Get<'a>),
-    CollateQuery(collate::Query<'a>),
+    Single(single::Args<'a>),
+    List(list::Args<'a>),
+    Collate(collate::Args<'a>),
 }
 
 impl<'kep, 'req: 'kep> Request<'req> {
     fn process(self, keeper: &'kep Keeper) -> Response<'kep> {
         match self {
-            Request::SingleGet(args) => {
-                let response = custard_lib::single::get(keeper, args);
+            Request::Single(args) => {
+                let response = custard_lib::single::single(keeper, args);
                 Response::Single(response)
             }
-            Request::SingleQuery(args) => {
-                let response = custard_lib::single::query(keeper, args);
-                Response::Single(response)
-            }
-            Request::ListGet(args) => {
-                let response = custard_lib::list::get(keeper, args);
-                Response::List(response)
-            }
-            Request::ListQuery(args) => {
+            Request::List(args) => {
                 let response = custard_lib::list::query(keeper, args);
                 Response::List(response)
             }
-            Request::CollateGet(args) => {
-                let response = custard_lib::collate::get(keeper, args);
-                Response::Collate(response)
-            }
-            Request::CollateQuery(args) => {
-                let response = custard_lib::collate::query(keeper, args);
+            Request::Collate(args) => {
+                let response = custard_lib::collate::collate(keeper, args);
                 Response::Collate(response)
             }
         }
@@ -82,8 +68,8 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
     let req = match rmp_serde::from_slice::<Request>(in_buf) {
         Ok(req) => req,
         Err(err) => {
-            error!("stream decode failed: {err}");
-            return internal_server_error_bytes();
+            error!("stream request decode failed: {err}");
+            return INTERNAL_SERVER_ERROR_BYTES.to_vec();
         }
     };
 
@@ -91,7 +77,7 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
         Ok(keeper) => keeper,
         Err(err) => {
             error!("Failed to lock markdown files: {err}");
-            return internal_server_error_bytes();
+            return INTERNAL_SERVER_ERROR_BYTES.to_vec();
         }
     };
     let resp = req.process(&keeper);
@@ -109,7 +95,7 @@ fn in_buf_2_out_buf(markdown_files: &frontmatter_file::keeper::ArcMutex, in_buf:
         }
         Err(err) => {
             error!("Failed to serialize response: {err}");
-            internal_server_error_bytes()
+            INTERNAL_SERVER_ERROR_BYTES.to_vec()
         }
     }
 }
@@ -123,26 +109,33 @@ async fn accept_streams(
         debug!("accepted stream");
         let mf = markdown_files.clone();
         tokio::spawn(async move {
-            let mut buf = vec![0; 1024];
+            let mut buf = Vec::new();
 
-            loop {
-                debug!("reading stream");
-                match stream.read(&mut buf).await {
-                    Ok(0) => {
-                        debug!("stream terminated");
-                        break;
+            debug!("reading stream");
+            let request_length = match stream.read_u32().await {
+                Ok(n) => n,
+                Err(err) => {
+                    error!("Failed to read request length: {err}");
+                    if let Err(err) = stream.shutdown().await {
+                        error!("stream shutdown failed: {err}");
                     }
-                    Ok(n) => {
-                        debug!("read {n} bytes");
-                        let out_buf = in_buf_2_out_buf(&mf, &buf[..n]);
-                        let Err(err) = stream.write_all(&out_buf).await else {
-                            continue;
-                        };
+                    return;
+                }
+            };
+            debug!("received request length: {request_length}");
+            buf.resize(request_length as usize, 0);
+            match stream.read_exact(&mut buf).await {
+                Ok(n) => {
+                    debug!("read {n} bytes");
+                    let out_buf = in_buf_2_out_buf(&mf, &buf[..n]);
+                    if let Err(err) = stream.write_all(&out_buf).await {
                         error!("stream write failed: {err}");
+                    } else {
+                        debug!("successfully resolved request/response");
                     }
-                    Err(err) => {
-                        error!("stream read failed: {err}");
-                    }
+                }
+                Err(err) => {
+                    error!("stream read failed: {err}");
                 }
             }
         });
@@ -187,5 +180,23 @@ async fn main() {
     if let Err(err) = run().await {
         eprintln!("Error: {err}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn result_internal_server_error_bytes() {
+        let bytes = rmp_serde::to_vec(&Result::<()>::InternalServerError(())).unwrap();
+        assert_eq!(INTERNAL_SERVER_ERROR_BYTES.to_vec(), bytes);
+    }
+
+    #[test]
+    fn result_ok_bytes() {
+        let bytes = rmp_serde::to_vec(&Result::<u32>::Ok(1)).unwrap();
+        let hex = format!("{bytes:x?}");
+        assert_eq!("[92, a2, 4f, 6b, 1]", hex);
     }
 }

@@ -5,7 +5,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use custard_lib::{frontmatter_file, frontmatter_query::FrontmatterQuery};
+use custard_lib::{frontmatter_file, frontmatter_query::FrontmatterQueryMap};
 
 use super::lock_keeper;
 
@@ -58,7 +58,7 @@ pub async fn get(
 fn post_inner(
     params: &HashMap<String, String>,
     files: &frontmatter_file::keeper::ArcMutex,
-    query: FrontmatterQuery,
+    query: FrontmatterQueryMap,
 ) -> Result<(HeaderMap, Vec<frontmatter_file::Short>), StatusCode> {
     let keeper = &*lock_keeper(files)?;
 
@@ -83,7 +83,7 @@ fn post_inner(
 
     let response = custard_lib::list::query(
         keeper,
-        custard_lib::list::Query::new(query, sort_key, order_desc, offset, limit, intersect),
+        custard_lib::list::Args::query(query, sort_key, order_desc, offset, limit, intersect),
     );
 
     let headers = assign_headers(response.total);
@@ -94,7 +94,7 @@ fn post_inner(
 pub async fn post(
     State(markdown_files): State<frontmatter_file::keeper::ArcMutex>,
     params: Query<HashMap<String, String>>,
-    Json(query): Json<FrontmatterQuery>,
+    Json(query): Json<FrontmatterQueryMap>,
 ) -> Result<(HeaderMap, Json<Vec<frontmatter_file::Short>>), StatusCode> {
     let (headers, files) = post_inner(&params, &markdown_files, query)?;
 

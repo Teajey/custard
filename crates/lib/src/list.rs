@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::frontmatter_file::{self, Keeper, Short};
-use crate::frontmatter_query::FrontmatterQuery;
+use crate::frontmatter_query::{FrontmatterQuery, FrontmatterQueryMap};
 use crate::{get_sort_value, query_files};
 
 fn sort_with_params(sort_key: Option<&str>, order_desc: bool, files: &mut [Short]) {
@@ -87,8 +87,9 @@ pub fn get(keeper: &Keeper, args: Get<'_>) -> Response {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Query<'a> {
-    pub query: FrontmatterQuery,
+pub struct Args<'a> {
+    #[serde(default)]
+    pub query: Option<FrontmatterQuery>,
     #[serde(default)]
     pub sort_key: Option<&'a str>,
     #[serde(default)]
@@ -97,14 +98,28 @@ pub struct Query<'a> {
     pub offset: Option<usize>,
     #[serde(default)]
     pub limit: Option<usize>,
-    #[serde(default)]
-    pub intersect: bool,
 }
 
-impl<'a> Query<'a> {
+impl<'a> Args<'a> {
     #[must_use]
-    pub fn new(
-        query: FrontmatterQuery,
+    pub fn get(
+        sort_key: Option<&'a str>,
+        order_desc: bool,
+        offset: Option<usize>,
+        limit: Option<usize>,
+    ) -> Self {
+        Self {
+            query: None,
+            sort_key,
+            order_desc,
+            offset,
+            limit,
+        }
+    }
+
+    #[must_use]
+    pub fn query(
+        map: FrontmatterQueryMap,
         sort_key: Option<&'a str>,
         order_desc: bool,
         offset: Option<usize>,
@@ -112,34 +127,38 @@ impl<'a> Query<'a> {
         intersect: bool,
     ) -> Self {
         Self {
-            query,
+            query: Some(FrontmatterQuery { map, intersect }),
             sort_key,
             order_desc,
             offset,
             limit,
-            intersect,
         }
     }
 }
 
-fn inner_query(keeper: &Keeper, args: Query<'_>) -> Response {
+fn inner_query(keeper: &Keeper, args: Args<'_>) -> Response {
     let files = keeper.files();
 
-    let mut filtered_files = query_files(files, args.query, None, args.intersect)
-        .map(|file| file.clone().into())
-        .collect::<Vec<_>>();
+    let mut files = if let Some(query) = args.query {
+        query_files(files, query, None)
+            .cloned()
+            .map(Short::from)
+            .collect::<Vec<_>>()
+    } else {
+        files.cloned().map(Short::from).collect::<Vec<_>>()
+    };
 
-    let total = filtered_files.len();
+    let total = files.len();
 
-    sort_with_params(args.sort_key, args.order_desc, &mut filtered_files);
+    sort_with_params(args.sort_key, args.order_desc, &mut files);
 
-    let files = paginate(filtered_files, args.offset, args.limit);
+    let files = paginate(files, args.offset, args.limit);
 
     Response { files, total }
 }
 
 #[must_use]
-pub fn query(keeper: &Keeper, args: Query<'_>) -> Response {
+pub fn query(keeper: &Keeper, args: Args<'_>) -> Response {
     debug!("Received query request: {args:?}");
     let response = inner_query(keeper, args);
     debug!("Sending query response: {response:?}");
