@@ -7,6 +7,15 @@ import (
 	"github.com/Teajey/custard/go/client/sock"
 )
 
+func anyToStringSlice(a any) []string {
+	sl := a.([]any)
+	strs := make([]string, len(sl))
+	for i := range sl {
+		strs[i] = sl[i].(string)
+	}
+	return strs
+}
+
 func TestGetSingle(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
 	resp, err := client.Single(sock.SingleRequest{
@@ -17,6 +26,14 @@ func TestGetSingle(t *testing.T) {
 	}
 	if resp == nil {
 		t.Fatalf("Didn't find file")
+	}
+	tags := anyToStringSlice(resp.File.Frontmatter["tags"])
+	if len(tags) < 1 {
+		t.Fail()
+		t.Logf("Tags are absent: %#v", tags)
+	} else if slices.Compare(tags, []string{"travel"}) != 0 {
+		t.Fail()
+		t.Logf("Tags are incorrect: %#v", tags)
 	}
 	expectedPrevFileName := "canned-cake-canned-cake.md"
 	if resp.PrevFileName != expectedPrevFileName {
