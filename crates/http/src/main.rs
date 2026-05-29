@@ -31,20 +31,19 @@ async fn run() -> Result<()> {
             routing::post(route::frontmatter_list::post).get(route::frontmatter_list::get),
         )
         .route(
-            "/frontmatter/file/:name",
+            "/frontmatter/file/{name}",
             routing::post(route::frontmatter_file::post).get(route::frontmatter_file::get),
         )
         .route(
-            "/frontmatter/collate_strings/:key",
+            "/frontmatter/collate_strings/{key}",
             routing::post(route::collate_strings::post).get(route::collate_strings::get),
         )
         .with_state(markdown_files);
 
     let socket_addr_string = format!("0.0.0.0:{port}");
-    println!("Binding to {socket_addr_string}");
-    axum::Server::bind(&socket_addr_string.parse()?)
-        .serve(app.into_make_service())
-        .await?;
+    println!("Binding to http://{socket_addr_string}");
+    let listener = tokio::net::TcpListener::bind(socket_addr_string).await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }
