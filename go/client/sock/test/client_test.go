@@ -7,6 +7,15 @@ import (
 	"github.com/Teajey/custard/go/client/sock"
 )
 
+func anyToStringSlice(a any) []string {
+	sl := a.([]any)
+	strs := make([]string, len(sl))
+	for i := range sl {
+		strs[i] = sl[i].(string)
+	}
+	return strs
+}
+
 func TestGetSingle(t *testing.T) {
 	client := sock.NewClient("/tmp/custard")
 	resp, err := client.Single(sock.SingleRequest{
@@ -17,6 +26,14 @@ func TestGetSingle(t *testing.T) {
 	}
 	if resp == nil {
 		t.Fatalf("Didn't find file")
+	}
+	tags := anyToStringSlice(resp.File.Frontmatter["tags"])
+	if len(tags) < 1 {
+		t.Fail()
+		t.Logf("Tags are absent: %#v", tags)
+	} else if slices.Compare(tags, []string{"travel"}) != 0 {
+		t.Fail()
+		t.Logf("Tags are incorrect: %#v", tags)
 	}
 	expectedPrevFileName := "canned-cake-canned-cake.md"
 	if resp.PrevFileName != expectedPrevFileName {
@@ -86,7 +103,7 @@ func TestGetList(t *testing.T) {
 	if respLen != 3 {
 		t.Fatalf("Unexpected response length: %d", respLen)
 	}
-	if resp.Total != 58 {
+	if resp.Total != 65 {
 		t.Fatalf("Unexpected response total: %d", resp.Total)
 	}
 }
@@ -142,5 +159,23 @@ func TestQueryCollate(t *testing.T) {
 	expected := []string{"code", "sketch"}
 	if !slices.Equal(expected, resp) {
 		t.Fatalf("Expected %v but got %v", expected, resp)
+	}
+}
+
+func TestGetListDirectory(t *testing.T) {
+	client := sock.NewClient("/tmp/custard")
+	resp, err := client.List(sock.ListRequest{
+		Directories: []string{"john"},
+		Limit:       3,
+	})
+	if err != nil {
+		t.Fatalf("Request failed: %s", err)
+	}
+	respLen := len(resp.Files)
+	if respLen != 1 {
+		t.Fatalf("Unexpected response length: %d", respLen)
+	}
+	if resp.Total != 1 {
+		t.Fatalf("Unexpected response total: %d", resp.Total)
 	}
 }

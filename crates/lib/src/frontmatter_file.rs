@@ -1,6 +1,6 @@
 pub mod keeper;
 
-use anyhow::Result;
+use anyhow::{anyhow, Context as _};
 use camino::{Utf8Path as Path, Utf8PathBuf};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -10,16 +10,11 @@ pub use keeper::Keeper;
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct FrontmatterFile {
     pub name: String,
+    pub directory: Utf8PathBuf,
     pub frontmatter: Option<serde_yaml::Mapping>,
     pub body: String,
     pub modified: DateTime<Utc>,
     pub created: DateTime<Utc>,
-}
-
-impl PartialOrd for FrontmatterFile {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.created.cmp(&other.created))
-    }
 }
 
 impl Ord for FrontmatterFile {
@@ -28,19 +23,20 @@ impl Ord for FrontmatterFile {
     }
 }
 
+impl PartialOrd for FrontmatterFile {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct Short {
     pub name: String,
+    pub directory: Utf8PathBuf,
     pub frontmatter: Option<serde_yaml::Mapping>,
     one_liner: Option<String>,
     pub modified: DateTime<Utc>,
     pub created: DateTime<Utc>,
-}
-
-impl PartialOrd for Short {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.created.cmp(&other.created))
-    }
 }
 
 impl Ord for Short {
@@ -49,10 +45,17 @@ impl Ord for Short {
     }
 }
 
+impl PartialOrd for Short {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl From<FrontmatterFile> for Short {
     fn from(
         FrontmatterFile {
             name,
+            directory,
             frontmatter,
             body,
             modified,
@@ -67,22 +70,13 @@ impl From<FrontmatterFile> for Short {
         };
         Self {
             name,
+            directory,
             frontmatter,
             one_liner,
             modified,
             created,
         }
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ReadFromPathError {
-    #[error("Failed to parse frontmatter for '{0}': {1}")]
-    Yaml(String, serde_yaml::Error),
-    #[error("Failed to load: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("Tried to read from path with no file name: {0}")]
-    NoFileNamePath(Utf8PathBuf),
 }
 
 impl FrontmatterFile {
@@ -111,19 +105,23 @@ impl FrontmatterFile {
         &self.modified
     }
 
-    pub fn read_from_path(path: &Path) -> Result<Self, ReadFromPathError> {
-        let name = path
-            .file_name()
-            .ok_or_else(|| ReadFromPathError::NoFileNamePath(path.to_path_buf()))?
-            .to_owned();
-        let metadata = std::fs::metadata(path)?;
-        let modified = metadata.modified()?.into();
-        let created = metadata.created()?.into();
-        let string = std::fs::read_to_string(path)?;
+    pub fn read_from_path(path: &Path) -> anyhow::Result<Self> {
+        let cwd = std::env::current_dir().context("getting cwd")?;
+        let rel_path = path.strip_prefix(cwd).context("stripping cwd from path")?;
+        let name = rel_path.to_string();
+        let path = path.to_owned();
+        let Some(parent) = rel_path.parent().map(ToOwned::to_owned) else {
+            return Err(anyhow!("missing parent directory"));
+        };
+        let metadata = std::fs::metadata(&path).context("loading metadata")?;
+        let modified = metadata.modified().context("reading modified date")?.into();
+        let created = metadata.created().context("reading created date")?.into();
+        let string = std::fs::read_to_string(&path).context("reading file content")?;
 
         if !string.starts_with("---\n") {
             let md = FrontmatterFile {
                 name,
+                directory: parent,
                 frontmatter: None,
                 body: string,
                 modified,
@@ -135,6 +133,7 @@ impl FrontmatterFile {
         let [_, frontmatter, body] = string.splitn(3, "---\n").collect::<Vec<_>>()[..] else {
             let md = FrontmatterFile {
                 name,
+                directory: parent,
                 frontmatter: None,
                 body: string,
                 modified,
@@ -143,11 +142,11 @@ impl FrontmatterFile {
             return Ok(md);
         };
 
-        let frontmatter = serde_yaml::from_str(frontmatter)
-            .map_err(|err| ReadFromPathError::Yaml(name.clone(), err))?;
+        let frontmatter = serde_yaml::from_str(frontmatter).context("reading frontmatter")?;
 
         Ok(FrontmatterFile {
             name,
+            directory: parent,
             frontmatter: Some(frontmatter),
             body: body.to_owned(),
             modified,

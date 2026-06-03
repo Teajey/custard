@@ -56,6 +56,8 @@ pub struct Response<'a> {
 pub struct Args<'a> {
     pub name: &'a str,
     #[serde(default)]
+    pub directories: Vec<String>,
+    #[serde(default)]
     pub query: Option<FrontmatterQuery>,
     #[serde(default)]
     pub sort_key: Option<&'a str>,
@@ -66,6 +68,12 @@ pub struct Args<'a> {
 #[allow(clippy::needless_pass_by_value)]
 fn inner<'a, 'b: 'a>(keeper: &'a Keeper, args: Args<'b>) -> Option<Response<'a>> {
     let files = keeper.files();
+
+    let files: Box<dyn Iterator<Item = &FrontmatterFile>> = if args.directories.is_empty() {
+        Box::new(files)
+    } else {
+        Box::new(files.filter(|f| args.directories.iter().any(|d| d == f.directory.as_str())))
+    };
 
     let mut files = if let Some(query) = args.query {
         query_files(files, query, Some(args.name)).collect::<Vec<_>>()
@@ -152,6 +160,7 @@ mod test {
             path!("/something.md"),
             FrontmatterFile {
                 name: s!("something.md"),
+                directory: path!("/something.md"),
                 frontmatter: None,
                 body: s!(""),
                 modified: dt!(2024, 1, 1, 6),
@@ -162,6 +171,7 @@ mod test {
             path!("/about.md"),
             FrontmatterFile {
                 name: s!("about.md"),
+                directory: path!("/about.md"),
                 frontmatter: Some(fm.clone()),
                 body: s!(""),
                 modified: dt!(2024, 1, 1, 11),
@@ -172,6 +182,7 @@ mod test {
             path!("/blah.md"),
             FrontmatterFile {
                 name: s!("blah.md"),
+                directory: path!("/blah.md"),
                 frontmatter: Some(fm),
                 body: s!(""),
                 modified: dt!(2024, 1, 1, 16),
@@ -189,6 +200,7 @@ mod test {
             &keeper,
             super::Args {
                 name: "something.md",
+                directories: vec![],
                 query: None,
                 sort_key: Some("created"),
                 order_desc: true,
@@ -202,6 +214,7 @@ mod test {
             &keeper,
             super::Args {
                 name: "about.md",
+                directories: vec![],
                 query: None,
                 sort_key: Some("created"),
                 order_desc: true,
@@ -215,6 +228,7 @@ mod test {
             &keeper,
             super::Args {
                 name: "blah.md",
+                directories: vec![],
                 query: None,
                 sort_key: Some("created"),
                 order_desc: true,
@@ -237,6 +251,7 @@ mod test {
             &keeper,
             super::Args {
                 name: "about.md",
+                directories: vec![],
                 query: Some(FrontmatterQuery {
                     map: query_map.clone(),
                     intersect: false,
@@ -253,6 +268,7 @@ mod test {
             &keeper,
             super::Args {
                 name: "blah.md",
+                directories: vec![],
                 query: Some(FrontmatterQuery {
                     map: query_map.clone(),
                     intersect: false,
@@ -269,6 +285,7 @@ mod test {
             &keeper,
             super::Args {
                 name: "something.md",
+                directories: vec![],
                 query: Some(FrontmatterQuery {
                     map: query_map,
                     intersect: false,

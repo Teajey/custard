@@ -69,6 +69,7 @@ fn post_inner(
     files: &frontmatter_file::keeper::ArcMutex,
     params: &HashMap<String, String>,
     name: &str,
+    directories: Vec<String>,
     query_map: FrontmatterQueryMap,
 ) -> Result<(HeaderMap, String), StatusCode> {
     let keeper = &*lock_keeper(files)?;
@@ -86,6 +87,7 @@ fn post_inner(
         keeper,
         custard_lib::single::Args {
             name,
+            directories,
             query: Some(FrontmatterQuery {
                 map: query_map,
                 intersect,
@@ -111,7 +113,7 @@ pub async fn post(
     Path(name): Path<String>,
     Json(query): Json<FrontmatterQueryMap>,
 ) -> Result<(HeaderMap, String), StatusCode> {
-    let result = post_inner(&markdown_files, &params, &name, query)?;
+    let result = post_inner(&markdown_files, &params, &name, vec![], query)?;
 
     Ok(result)
 }
@@ -120,6 +122,7 @@ fn get_inner(
     files: &frontmatter_file::keeper::ArcMutex,
     params: &HashMap<String, String>,
     name: &str,
+    directories: Vec<String>,
 ) -> Result<(HeaderMap, String), StatusCode> {
     let keeper = &*lock_keeper(files)?;
 
@@ -130,6 +133,7 @@ fn get_inner(
         keeper,
         custard_lib::single::Args {
             name,
+            directories,
             query: None,
             sort_key,
             order_desc,
@@ -151,7 +155,7 @@ pub async fn get(
     params: Query<HashMap<String, String>>,
     Path(name): Path<String>,
 ) -> Result<(HeaderMap, String), StatusCode> {
-    let result = get_inner(&markdown_files, &params, &name)?;
+    let result = get_inner(&markdown_files, &params, &name, vec![])?;
 
     Ok(result)
 }

@@ -21,6 +21,7 @@ pub async fn get(
         keeper,
         custard_lib::collate::Args {
             key: key.as_str(),
+            directories: vec![],
             query: None,
         },
     );
@@ -47,6 +48,7 @@ pub async fn post(
         keeper,
         custard_lib::collate::Args {
             key: key.as_str(),
+            directories: vec![],
             query: Some(custard_lib::frontmatter_query::FrontmatterQuery {
                 map: query_map,
                 intersect,

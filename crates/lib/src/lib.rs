@@ -33,6 +33,9 @@ fn query_files<'a>(
     name: Option<&'a str>,
 ) -> impl Iterator<Item = &'a FrontmatterFile> {
     files.filter(move |file| {
+        // if !directories.is_empty() && !directories.iter().any(|d| d == file.directory.as_str()) {
+        //     return false;
+        // }
         if let Some(name) = name {
             if file.name == name {
                 return true;

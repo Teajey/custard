@@ -34,11 +34,19 @@ fn collate_strings_from_files<'a>(
 pub struct Args<'a> {
     pub key: &'a str,
     #[serde(default)]
+    pub directories: Vec<String>,
+    #[serde(default)]
     pub query: Option<FrontmatterQuery>,
 }
 
 fn inner(keeper: &Keeper, args: Args<'_>) -> Vec<String> {
     let files = keeper.files();
+
+    let files: Box<dyn Iterator<Item = &FrontmatterFile>> = if args.directories.is_empty() {
+        Box::new(files)
+    } else {
+        Box::new(files.filter(|f| args.directories.iter().any(|d| d == f.directory.as_str())))
+    };
 
     let mut values = if let Some(query) = args.query {
         let files = query_files(files, query, None);

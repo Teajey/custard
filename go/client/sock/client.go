@@ -25,27 +25,31 @@ type Query struct {
 }
 
 type SingleRequest struct {
-	Name      string `msgpack:"name"`
-	Query     *Query `msgpack:"query,omitempty"`
-	SortKey   string `msgpack:"sort_key,omitempty"`
-	OrderDesc bool   `msgpack:"order_desc,omitempty"`
+	Name        string   `msgpack:"name"`
+	Directories []string `msgpack:"directories,omitempty"`
+	Query       *Query   `msgpack:"query,omitempty"`
+	SortKey     string   `msgpack:"sort_key,omitempty"`
+	OrderDesc   bool     `msgpack:"order_desc,omitempty"`
 }
 
 type ListRequest struct {
-	Query     *Query `msgpack:"query,omitempty"`
-	SortKey   string `msgpack:"sort_key,omitempty"`
-	OrderDesc bool   `msgpack:"order_desc,omitempty"`
-	Offset    uint   `msgpack:"offset,omitempty"`
-	Limit     uint   `msgpack:"limit,omitempty"`
+	Directories []string `msgpack:"directories,omitempty"`
+	Query       *Query   `msgpack:"query,omitempty"`
+	SortKey     string   `msgpack:"sort_key,omitempty"`
+	OrderDesc   bool     `msgpack:"order_desc,omitempty"`
+	Offset      uint     `msgpack:"offset,omitempty"`
+	Limit       uint     `msgpack:"limit,omitempty"`
 }
 
 type CollateRequest struct {
-	Query *Query `msgpack:"query,omitempty"`
-	Key   string `msgpack:"key"`
+	Query       *Query   `msgpack:"query,omitempty"`
+	Directories []string `msgpack:"directories,omitempty"`
+	Key         string   `msgpack:"key"`
 }
 
 type FileResponse struct {
 	Name        string         `msgpack:"name"`
+	Directory   string         `msgpack:"directory"`
 	Frontmatter map[string]any `msgpack:"frontmatter,omitempty"`
 	Body        string         `msgpack:"body"`
 	Modified    string         `msgpack:"modified"`
@@ -59,6 +63,7 @@ type SingleResponse struct {
 }
 
 type ShortResponse struct {
+	Directory   string         `msgpack:"directory"`
 	Name        string         `msgpack:"name"`
 	Frontmatter map[string]any `msgpack:"frontmatter,omitempty"`
 	OneLiner    string         `msgpack:"one_liner,omitempty"`
