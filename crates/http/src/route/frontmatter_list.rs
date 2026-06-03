@@ -38,7 +38,7 @@ fn get_inner(
 
     let response = custard_lib::list::get(
         keeper,
-        custard_lib::list::Get::new(sort_key, order_desc, offset, limit),
+        custard_lib::list::Get::new(vec![], sort_key, order_desc, offset, limit),
     );
 
     let headers = assign_headers(response.total);
@@ -83,7 +83,15 @@ fn post_inner(
 
     let response = custard_lib::list::query(
         keeper,
-        custard_lib::list::Args::query(query, sort_key, order_desc, offset, limit, intersect),
+        custard_lib::list::Args::query(
+            vec![],
+            query,
+            sort_key,
+            order_desc,
+            offset,
+            limit,
+            intersect,
+        ),
     );
 
     let headers = assign_headers(response.total);

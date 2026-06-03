@@ -33,6 +33,8 @@ fn paginate(files: Vec<Short>, offset: Option<usize>, limit: Option<usize>) -> V
 #[derive(Debug, Deserialize)]
 pub struct Get<'a> {
     #[serde(default)]
+    pub directories: Vec<String>,
+    #[serde(default)]
     pub sort_key: Option<&'a str>,
     #[serde(default)]
     pub order_desc: bool,
@@ -45,12 +47,14 @@ pub struct Get<'a> {
 impl<'a> Get<'a> {
     #[must_use]
     pub fn new(
+        directories: Vec<String>,
         sort_key: Option<&'a str>,
         order_desc: bool,
         offset: Option<usize>,
         limit: Option<usize>,
     ) -> Self {
         Self {
+            directories,
             sort_key,
             order_desc,
             offset,
@@ -89,6 +93,8 @@ pub fn get(keeper: &Keeper, args: Get<'_>) -> Response {
 #[derive(Debug, Deserialize)]
 pub struct Args<'a> {
     #[serde(default)]
+    pub directories: Vec<String>,
+    #[serde(default)]
     pub query: Option<FrontmatterQuery>,
     #[serde(default)]
     pub sort_key: Option<&'a str>,
@@ -103,12 +109,14 @@ pub struct Args<'a> {
 impl<'a> Args<'a> {
     #[must_use]
     pub fn get(
+        directories: Vec<String>,
         sort_key: Option<&'a str>,
         order_desc: bool,
         offset: Option<usize>,
         limit: Option<usize>,
     ) -> Self {
         Self {
+            directories,
             query: None,
             sort_key,
             order_desc,
@@ -119,6 +127,7 @@ impl<'a> Args<'a> {
 
     #[must_use]
     pub fn query(
+        directories: Vec<String>,
         map: FrontmatterQueryMap,
         sort_key: Option<&'a str>,
         order_desc: bool,
@@ -127,6 +136,7 @@ impl<'a> Args<'a> {
         intersect: bool,
     ) -> Self {
         Self {
+            directories,
             query: Some(FrontmatterQuery { map, intersect }),
             sort_key,
             order_desc,
@@ -138,6 +148,13 @@ impl<'a> Args<'a> {
 
 fn inner_query(keeper: &Keeper, args: Args<'_>) -> Response {
     let files = keeper.files();
+
+    let files: Box<dyn Iterator<Item = &frontmatter_file::FrontmatterFile>> =
+        if args.directories.is_empty() {
+            Box::new(files)
+        } else {
+            Box::new(files.filter(|f| args.directories.iter().any(|d| d == f.directory.as_str())))
+        };
 
     let mut files = if let Some(query) = args.query {
         query_files(files, query, None)

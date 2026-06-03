@@ -23,7 +23,7 @@ async fn run() -> Result<()> {
 
     let mut watcher = notify::recommended_watcher(markdown_files.clone())?;
 
-    watcher.watch(current_dir.as_std_path(), RecursiveMode::NonRecursive)?;
+    watcher.watch(current_dir.as_std_path(), RecursiveMode::Recursive)?;
 
     let app = Router::new()
         .route(
@@ -31,7 +31,7 @@ async fn run() -> Result<()> {
             routing::post(route::frontmatter_list::post).get(route::frontmatter_list::get),
         )
         .route(
-            "/frontmatter/file/{name}",
+            "/frontmatter/file/{*name}",
             routing::post(route::frontmatter_file::post).get(route::frontmatter_file::get),
         )
         .route(

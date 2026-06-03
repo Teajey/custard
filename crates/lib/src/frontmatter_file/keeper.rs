@@ -47,15 +47,24 @@ pub struct Keeper {
 pub enum NewKeeperError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("Failed to load frontmatter file: {0}")]
-    ReadFrontmatterFromPath(#[from] super::ReadFromPathError),
+    #[error("failed to load frontmatter file: {0}")]
+    ReadFrontmatterFromPath(#[from] anyhow::Error),
 }
 
 impl Keeper {
     pub fn new(path: &Utf8Path) -> Result<Self, NewKeeperError> {
+        let cwd = std::env::current_dir().ok();
         let markdown_fps = fs::filepaths_with_extensions(path, &["md"])?
             .into_iter()
-            .map(|path| -> Result<_, super::ReadFromPathError> {
+            .filter(|path| {
+                !cwd.as_ref()
+                    .and_then(|cwd| path.strip_prefix(cwd).ok())
+                    .and_then(|rel_path| rel_path.parent())
+                    .iter()
+                    .flat_map(|dirs| dirs.components())
+                    .any(|c| c.as_str().starts_with('.'))
+            })
+            .map(|path| -> anyhow::Result<_> {
                 let md = FrontmatterFile::read_from_path(&path)?;
 
                 Ok((path, md))
@@ -157,6 +166,16 @@ impl notify::EventHandler for ArcMutex {
                         return;
                     }
                 };
+                if let Ok(cwd) = std::env::current_dir() {
+                    if let Ok(rel_path) = path.as_std_path().strip_prefix(cwd) {
+                        let is_hidden = rel_path
+                            .components()
+                            .any(|c| c.as_os_str().to_str().is_some_and(|c| c.starts_with('.')));
+                        if is_hidden {
+                            return;
+                        }
+                    }
+                }
                 if !path_has_extensions(&path, &["md"]) {
                     return;
                 }
