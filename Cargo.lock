@@ -203,7 +203,7 @@ dependencies = [
 
 [[package]]
 name = "custard"
-version = "0.6.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -218,7 +218,7 @@ dependencies = [
 
 [[package]]
 name = "custard-sock"
-version = "0.6.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "anyhow",
  "camino",
@@ -235,7 +235,7 @@ dependencies = [
 
 [[package]]
 name = "custard_lib"
-version = "0.6.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "anyhow",
  "camino",
